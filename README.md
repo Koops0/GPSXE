@@ -14,21 +14,21 @@ This is a work-in-progress Sony PlayStation emulator project coded in the Go pro
 
 ## Features
 
-* Game Compatibility: The emulator aims to support a wide range of PlayStation 1 games, allowing users to enjoy their favorite classics on modern devices.
-* Core Emulation: The emulator's core is designed to emulate the original PlayStation 1 hardware accurately, providing an authentic gaming experience.
+* Game Compatibility: The emulator aims to support a wide range of PlayStation games, allowing users to enjoy their favorite classics on modern devices.
+* Core Emulation: The emulator's core is designed to emulate the original hardware accurately, providing an authentic gaming experience.
 * Graphics and Audio: Efforts are being made to accurately render graphics and reproduce audio as intended on the original console.
 * Save States: The emulator will support saving and loading game states, allowing users to pick up where they left off at any time.
 * Controller Support: Planned support for various input devices to enhance the gameplay experience.
 
 ## Getting Started
 
-To get started with the PlayStation 1 emulator, follow these steps:
+To get started with the emulator, follow these steps:
 
 1. Clone the repository to your local machine.
 2. Install the necessary dependencies as outlined in the project documentation.
 3. Compile the source code or build the project using the provided build scripts.
-4. Obtain PlayStation 1 BIOS files (scph1001.bin) legally and place them in the appropriate directory.
-5. Acquire PlayStation 1 game ROMs legally and store them in a designated folder.
+4. Obtain PlayStation BIOS files (scph1001.bin) legally and place them in the appropriate directory.
+5. Acquire PlayStation game ROMs legally and store them in a designated folder.
 6. Configure the emulator settings, including graphics, audio, and controls, as per your preference.
 7. Launch the emulator and select a game ROM to start playing.
 
@@ -37,15 +37,15 @@ To get started with the PlayStation 1 emulator, follow these steps:
 Once you have set up the emulator and configured the necessary settings, use the following steps to play games:
 
 1. Launch the emulator application and navigate to the game selection screen.
-2. Choose a PlayStation 1 game ROM from the available list.
+2. Choose a ROM from the available list.
 3. Adjust any additional game-specific settings, if applicable.
 4. Start the game emulation.
 5. Enjoy playing your favourite games!
 
 ## Contributing
 
-Contributions to the PlayStation 1 emulator project are welcome and appreciated. If you would like to contribute, please follow the guidelines outlined in the CONTRIBUTING.md file.
+Contributions to basic-emu are welcome and appreciated. If you would like to contribute, please follow the guidelines outlined in the CONTRIBUTING.md file.
 
 ## License
 
-The PlayStation 1 emulator project is licensed under the MIT License. Please review the license file for more information about the permissions and limitations it provides.
+basic-emu is licensed under the MIT License. Please review the license file for more information about the permissions and limitations it provides.
