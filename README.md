@@ -11,6 +11,7 @@ This is a work-in-progress Sony PlayStation emulator project coded in the Go pro
 - [Usage](#usage)
 - [Contributing](#contributing)
 - [License](#license)
+- [Special Thanks](#special-thanks)
 
 ## Features
 
@@ -49,3 +50,7 @@ Contributions to basic-emu are welcome and appreciated. If you would like to con
 ## License
 
 basic-emu is licensed under the MIT License. Please review the license file for more information about the permissions and limitations it provides.
+
+## Special Thanks
+
+* Simias' [PSX Guide](https://github.com/simias/psx-guide)
