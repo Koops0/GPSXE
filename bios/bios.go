@@ -10,7 +10,7 @@ type BIOS struct {
 	data []uint8
 }
 
-func (b *BIOS) New(path string) (*BIOS, error) {
+func (b BIOS) New(path string) (*BIOS, error) {
 	file, err := os.Open("SCPH1001.bin")
 
 	if err != nil {
@@ -33,13 +33,12 @@ func (b *BIOS) New(path string) (*BIOS, error) {
 	}
 }
 
-func (b *BIOS) load32(offset uint32) uint32 {
+func (b *BIOS) Load32(offset uint32) uint32 {
 	b0 := uint32(b.data[offset])
 	b1 := uint32(b.data[offset+1])
 	b2 := uint32(b.data[offset+2])
 	b3 := uint32(b.data[offset+3])
 
 	res := b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
-
-	return 1
+	return res
 }
