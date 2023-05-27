@@ -14,6 +14,7 @@ type CPU struct {
 }
 
 func (c CPU) New(inter biosmap.Interconnect) {
+	regs[0] = 0
 	c.pc = 0xbfc00000
 	c.inter = inter
 }
