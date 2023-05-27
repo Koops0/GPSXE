@@ -11,7 +11,7 @@ type BIOS struct {
 }
 
 func (b BIOS) New(path string) (*BIOS, error) {
-	file, err := os.Open("SCPH1001.bin")
+	file, err := os.Open(path)
 
 	if err != nil {
 		return nil, err
