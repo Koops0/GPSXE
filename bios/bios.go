@@ -7,10 +7,10 @@ import (
 const BIOS_SIZE uint64 = 512 * 1024
 
 type BIOS struct {
-	data []uint8
+	data []uint8 //Memory
 }
 
-func (b BIOS) New(path string) (*BIOS, error) {
+func (b BIOS) New(path string) (*BIOS, error) { //Load in PSX BIOS
 	file, err := os.Open(path)
 
 	if err != nil {
