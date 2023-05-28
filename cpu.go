@@ -13,7 +13,7 @@ type CPU struct {
 	inter biosmap.Interconnect //Interface
 }
 
-func (c CPU) New(inter biosmap.Interconnect) {
+func (c *CPU) New(inter biosmap.Interconnect) {
 	c.reg[0] = 0
 	c.pc = 0xbfc00000 //reset val
 	c.inter = inter
@@ -58,6 +58,15 @@ func (c *CPU) Opori(instruction Instruction){
 	c.Setreg(t,v)
 }
 
+func (c *CPU) Opsw(instruction Instruction){
+	i := instruction.Imm()
+	t := instruction.T()
+	s := instruction.Function()
+	addr := c.reg[s]+i
+	v := c.reg[t]
+	c.Store32(addr, v)
+}
+
 func (c *CPU) Store32(addr uint32, val uint32){
 	c.inter.Store32(addr, val)
 }
@@ -68,6 +77,8 @@ func (c *CPU) Decode_and_execute(instruction Instruction) {
 		c.Oplui(instruction)
 	case 0b001101:
 		c.Opori(instruction)
+	case 0b001011:
+		c.Opsw(instruction)
 	default:
 		panic(fmt.Sprintf("Unhandled instruction: %x", instruction))
 	}
@@ -82,3 +93,4 @@ func (c *CPU) Run_next(inst Instruction) {
 func (c *CPU) Load32(addr uint32) uint32 { //load 32-bit from inter
 	return c.inter.Load32(addr)
 }
+

@@ -8,12 +8,14 @@ import (
 )
 
 func main() {
-	bios, err := bios.BIOS.New("roms/SCPH1001.bin")
+	bios, err := bios.New("SCPH1001.bin")
 	if err != nil {
 		fmt.Println("oops")
 	}
 
 	inter := biosmap.Interconnect{}.New(bios)
 
-	cpu := CPU.New(inter)
+	cpu := &CPU{}
+	cpu.New(inter)
+	fmt.Println(cpu.reg[0])
 }

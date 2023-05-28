@@ -33,7 +33,9 @@ func (i Interconnect) New(bios *bios.BIOS) Interconnect {
 }
 
 func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
-	if offset := BIOS.Contains(addr); offset != nil {
+	if addr%4 != 0 {
+		panic("error!!!!")
+	} else if offset := BIOS.Contains(addr); offset != nil {
 		return i.bios.Load32(*offset)
 	} else {
 		return 0
@@ -41,5 +43,7 @@ func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
 }
 
 func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in address
-	panic("bruh")
+	if addr%4 != 0 {
+		panic("bruh")
+	}
 }
