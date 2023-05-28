@@ -49,25 +49,41 @@ func (c *CPU) Oplui(instruction Instruction) {
 
 }
 
-//Bitwise OR Imm
-func (c *CPU) Opori(instruction Instruction){
+// Bitwise OR Imm
+func (c *CPU) Opori(instruction Instruction) {
 	i := instruction.Imm()
 	t := instruction.T()
 	s := instruction.Function()
 	v := c.reg[s] | i
-	c.Setreg(t,v)
+	c.Setreg(t, v)
 }
 
-func (c *CPU) Opsw(instruction Instruction){
+func (c *CPU) Opsw(instruction Instruction) {
 	i := instruction.Imm()
 	t := instruction.T()
 	s := instruction.Function()
-	addr := c.reg[s]+i
+	addr := c.reg[s] + i
 	v := c.reg[t]
 	c.Store32(addr, v)
 }
 
-func (c *CPU) Store32(addr uint32, val uint32){
+func (c *CPU) Opsll(instruction Instruction) { //Shift Left
+	i := instruction.Shift()
+	t := instruction.T()
+	d := instruction.D()
+	v := c.reg[t] << i
+	c.Setreg(d, v)
+}
+
+func (c *CPU) Opaddiu(instruction Instruction) { //Add immediate uint
+	i := instruction.Imm_se()
+	t := instruction.T()
+	s := instruction.Function()
+	v := c.reg[s] + i
+	c.Setreg(t, v)
+}
+
+func (c *CPU) Store32(addr uint32, val uint32) {
 	c.inter.Store32(addr, val)
 }
 
@@ -79,6 +95,15 @@ func (c *CPU) Decode_and_execute(instruction Instruction) {
 		c.Opori(instruction)
 	case 0b001011:
 		c.Opsw(instruction)
+	case 0b001001:
+		c.Opaddiu(instruction)
+	case 0b000000:
+		switch instruction.Subfunction() {
+		case 0b000000:
+			c.Opsll(instruction)
+		default:
+			panic(fmt.Sprintf("Unhandled instruction: %x", instruction))
+		}
 	default:
 		panic(fmt.Sprintf("Unhandled instruction: %x", instruction))
 	}
@@ -93,4 +118,3 @@ func (c *CPU) Run_next(inst Instruction) {
 func (c *CPU) Load32(addr uint32) uint32 { //load 32-bit from inter
 	return c.inter.Load32(addr)
 }
-
