@@ -8,6 +8,10 @@ func (i Instruction) Function() uint32 {
 	return i.op >> 26
 }
 
+func (i Instruction) S() uint32 {
+	return (i.op >> 21) & 0x1F
+}
+
 func (i Instruction) T() uint32 {
 	return (i.op >> 16) & 0x1f
 }
@@ -31,4 +35,8 @@ func (i Instruction) Subfunction() uint32 {
 
 func (i Instruction) Shift() uint32 {
 	return (i.op >> 6) & 0x1f
+}
+
+func (i Instruction) Imm_jump() uint32 {
+	return i.op & 0x3ffffff
 }

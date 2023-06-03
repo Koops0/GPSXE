@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"sync/atomic"
 
 	"./biosmap"
 )
 
 type CPU struct {
-	pc    uint32 //Program Counter
+	pc    uint32      //Program Counter
+	next  Instruction //next instruction
 	reg   [32]uint32
 	inter biosmap.Interconnect //Interface
 }
@@ -17,6 +17,7 @@ func (c *CPU) New(inter biosmap.Interconnect) {
 	c.reg[0] = 0
 	c.pc = 0xbfc00000 //reset val
 	c.inter = inter
+	c.next.op = 0x0
 }
 
 func (c CPU) Reg(index uint32) uint32 {
@@ -53,7 +54,7 @@ func (c *CPU) Oplui(instruction Instruction) {
 func (c *CPU) Opori(instruction Instruction) {
 	i := instruction.Imm()
 	t := instruction.T()
-	s := instruction.Function()
+	s := instruction.S()
 	v := c.reg[s] | i
 	c.Setreg(t, v)
 }
@@ -61,7 +62,7 @@ func (c *CPU) Opori(instruction Instruction) {
 func (c *CPU) Opsw(instruction Instruction) {
 	i := instruction.Imm()
 	t := instruction.T()
-	s := instruction.Function()
+	s := instruction.S()
 	addr := c.reg[s] + i
 	v := c.reg[t]
 	c.Store32(addr, v)
@@ -83,6 +84,20 @@ func (c *CPU) Opaddiu(instruction Instruction) { //Add immediate uint
 	c.Setreg(t, v)
 }
 
+func (c *CPU) Opj(instruction Instruction) { //Jump
+	i := instruction.Imm_jump()
+	c.pc = (c.pc & 0xf0000000) | (i << 2)
+
+}
+
+func (c *CPU) Opor(instruction Instruction) { //Or
+	d := instruction.D()
+	s := instruction.S()
+	t := instruction.T()
+	v := c.reg[s] | c.reg[t]
+	c.Setreg(d, v)
+}
+
 func (c *CPU) Store32(addr uint32, val uint32) {
 	c.inter.Store32(addr, val)
 }
@@ -97,6 +112,10 @@ func (c *CPU) Decode_and_execute(instruction Instruction) {
 		c.Opsw(instruction)
 	case 0b001001:
 		c.Opaddiu(instruction)
+	case 0b101111:
+		c.Opj(instruction)
+	case 0b100000:
+		c.Opor(instruction)
 	case 0b000000:
 		switch instruction.Subfunction() {
 		case 0b000000:
@@ -110,8 +129,9 @@ func (c *CPU) Decode_and_execute(instruction Instruction) {
 }
 
 func (c *CPU) Run_next(inst Instruction) {
-	inst.op = atomic.LoadUint32(&c.pc) //Grab inst
-	c.pc = Wrapping_add(c.pc, 4, 32)   //Increment PC
+	inst.op = c.next.op              //Grab inst
+	c.next.op = c.Load32(c.pc)       //Grab inst
+	c.pc = Wrapping_add(c.pc, 4, 32) //Increment PC
 	c.Decode_and_execute(inst)
 }
 

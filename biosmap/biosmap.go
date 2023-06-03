@@ -21,6 +21,11 @@ var MEM_CONTROL = Range{
 	bit:     36,
 }
 
+var RAM_SIZE = Range{
+	address: 0x1f801060,
+	bit:     4,
+}
+
 func (r Range) Contains(addr uint32) *uint32 { //Return offset if it exists
 	if addr >= r.address && addr < r.address+r.bit {
 		option := addr - r.address
