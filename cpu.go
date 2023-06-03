@@ -13,6 +13,8 @@ type CPU struct {
 	inter biosmap.Interconnect //Interface
 }
 
+type RegIn uint32
+
 func (c *CPU) New(inter biosmap.Interconnect) {
 	c.reg[0] = 0
 	c.pc = 0xbfc00000 //reset val
@@ -94,7 +96,7 @@ func (c *CPU) Opor(instruction Instruction) { //Or
 	d := instruction.D()
 	s := instruction.S()
 	t := instruction.T()
-	v := c.reg[s] | c.reg[t]
+	v := s | c.reg[t]
 	c.Setreg(d, v)
 }
 
