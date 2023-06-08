@@ -11,6 +11,7 @@ type CPU struct {
 	next  Instruction //next instruction
 	reg   [32]uint32
 	inter biosmap.Interconnect //Interface
+	sr    uint32               //Stat register
 }
 
 type RegIn uint32
@@ -20,6 +21,7 @@ func (c *CPU) New(inter biosmap.Interconnect) {
 	c.pc = 0xbfc00000 //reset val
 	c.inter = inter
 	c.next.op = 0x0
+	c.sr = 0
 }
 
 func (c CPU) Reg(index uint32) uint32 {
@@ -43,6 +45,27 @@ func Wrapping_add(a uint32, b uint32, mod uint32) uint32 {
 	return result
 }
 
+func Wrapping_sub(a uint32, b uint32, mod uint32) uint32 {
+	result := a - b
+
+	if result < 0 {
+		result += mod
+	} else if result >= mod {
+		result %= mod
+	}
+
+	return result
+}
+
+func (c *CPU) Branch(offset uint32) {
+	off := offset << 2
+	pc := c.pc
+	pc = Wrapping_add(off, pc, 32)
+	pc = Wrapping_sub(pc, 4, 32)
+	c.pc = pc
+
+}
+
 // Load Upper Immediate
 func (c *CPU) Oplui(instruction Instruction) {
 	i := instruction.Imm()
@@ -61,7 +84,13 @@ func (c *CPU) Opori(instruction Instruction) {
 	c.Setreg(t, v)
 }
 
-func (c *CPU) Opsw(instruction Instruction) {
+func (c *CPU) Opsw(instruction Instruction) { //stores word
+
+	if c.sr != 0 && 0x10000 != 0 {
+		fmt.Println("ignoring store while cache is isolated")
+		return
+	}
+
 	i := instruction.Imm()
 	t := instruction.T()
 	s := instruction.S()
@@ -100,6 +129,38 @@ func (c *CPU) Opor(instruction Instruction) { //Or
 	c.Setreg(d, v)
 }
 
+func (c *CPU) Opmtc0(instruction Instruction) { //Or
+	cpu_r := instruction.T()
+	cop_r := instruction.D()
+	v := c.reg[cpu_r]
+
+	switch cop_r {
+	case 12:
+		c.sr = v
+	default:
+		panic(fmt.Sprintf("Unhandled COP reg: %x", cop_r))
+	}
+}
+
+func (c *CPU) Opcop0(instruction Instruction) {
+	switch instruction.S() {
+	case 0b01000:
+		c.Opmtc0(instruction)
+	default:
+		panic(fmt.Sprintf("Unhandled COP instruction: %x", instruction))
+	}
+}
+
+func (c *CPU) Opbne(instruction Instruction) { //branch not equal
+	i := instruction.Imm_se()
+	s := instruction.S()
+	t := instruction.T()
+
+	if c.reg[s] != c.reg[t] {
+		c.Branch(i)
+	}
+}
+
 func (c *CPU) Store32(addr uint32, val uint32) {
 	c.inter.Store32(addr, val)
 }
@@ -118,6 +179,8 @@ func (c *CPU) Decode_and_execute(instruction Instruction) {
 		c.Opj(instruction)
 	case 0b100000:
 		c.Opor(instruction)
+	case 0b010000:
+		c.Opcop0(instruction)
 	case 0b000000:
 		switch instruction.Subfunction() {
 		case 0b000000:
