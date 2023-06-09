@@ -7,11 +7,13 @@ import (
 )
 
 type CPU struct {
-	pc    uint32      //Program Counter
-	next  Instruction //next instruction
-	reg   [32]uint32
-	inter biosmap.Interconnect //Interface
-	sr    uint32               //Stat register
+	pc      uint32      //Program Counter
+	next    Instruction //next instruction
+	reg     [32]uint32
+	out_reg [32]uint32           //2nd set
+	inter   biosmap.Interconnect //Interface
+	sr      uint32               //Stat register
+	load    RegIn
 }
 
 type RegIn uint32
@@ -22,6 +24,8 @@ func (c *CPU) New(inter biosmap.Interconnect) {
 	c.inter = inter
 	c.next.op = 0x0
 	c.sr = 0
+	c.out_reg = c.reg
+	c.load = 0
 }
 
 func (c CPU) Reg(index uint32) uint32 {
@@ -55,6 +59,14 @@ func Wrapping_sub(a uint32, b uint32, mod uint32) uint32 {
 	}
 
 	return result
+}
+
+func Checkedadd(a, b int32) (int32, error) {
+	result := a + b
+	if (b > 0 && result < a) || (b < 0 && result > a) {
+		return 0, fmt.Errorf("integer overflow")
+	}
+	return result, nil
 }
 
 func (c *CPU) Branch(offset uint32) {
@@ -161,6 +173,41 @@ func (c *CPU) Opbne(instruction Instruction) { //branch not equal
 	}
 }
 
+func (c *CPU) Opaddi(instruction Instruction) { //Add unsigned imm, check for overflow
+	i := int32(instruction.Imm_se())
+	s := instruction.S()
+	t := instruction.T()
+
+	v := int32(c.reg[s])
+
+	res, err := Checkedadd(v, i)
+
+	if err != nil {
+		panic("ADDI OVERFLOW")
+	} else {
+		s = uint32(res)
+	}
+
+	c.Setreg(t, s)
+}
+
+func (c *CPU) Oplw(instruction Instruction) { //Load word
+
+	if c.sr != 0 && 0x10000 != 0 {
+		fmt.Println("ignoring store while cache is isolated")
+		return
+	}
+
+	i := instruction.Imm_se()
+	s := instruction.S()
+	t := instruction.T()
+
+	addr := Wrapping_add(c.reg[s], i, 32)
+
+	v := c.Load32(addr)
+	c.Setreg(t, v)
+}
+
 func (c *CPU) Store32(addr uint32, val uint32) {
 	c.inter.Store32(addr, val)
 }
@@ -181,6 +228,12 @@ func (c *CPU) Decode_and_execute(instruction Instruction) {
 		c.Opor(instruction)
 	case 0b010000:
 		c.Opcop0(instruction)
+	case 0b101010:
+		c.Opbne(instruction)
+	case 0b100001:
+		c.Opaddi(instruction)
+	case 0b100011:
+		c.Oplw(instruction)
 	case 0b000000:
 		switch instruction.Subfunction() {
 		case 0b000000:
