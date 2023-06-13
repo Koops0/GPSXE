@@ -6,6 +6,16 @@ import (
 	"./biosmap"
 )
 
+type RegIn uint32
+type Load struct{
+	r		RegIn
+	val		uint32
+}
+
+func (l *Load) Load(reg RegIn, value uint32){
+	l.r = reg
+	l.val = value
+}
 type CPU struct {
 	pc      uint32      //Program Counter
 	next    Instruction //next instruction
@@ -13,10 +23,8 @@ type CPU struct {
 	out_reg [32]uint32           //2nd set
 	inter   biosmap.Interconnect //Interface
 	sr      uint32               //Stat register
-	load    RegIn
+	load    Load
 }
-
-type RegIn uint32
 
 func (c *CPU) New(inter biosmap.Interconnect) {
 	c.reg[0] = 0
@@ -25,7 +33,7 @@ func (c *CPU) New(inter biosmap.Interconnect) {
 	c.next.op = 0x0
 	c.sr = 0
 	c.out_reg = c.reg
-	c.load = 0
+	c.load.Load(0,0)
 }
 
 func (c CPU) Reg(index uint32) uint32 {
@@ -35,6 +43,11 @@ func (c CPU) Reg(index uint32) uint32 {
 func (c *CPU) Setreg(index uint32, val uint32) {
 	c.reg[index] = val
 	c.reg[0] = 0
+}
+
+func (c *CPU) Set_reg(index RegIn, val uint32) {
+	c.out_reg[index] = val
+	c.out_reg[0] = 0
 }
 
 func Wrapping_add(a uint32, b uint32, mod uint32) uint32 {
@@ -201,11 +214,13 @@ func (c *CPU) Oplw(instruction Instruction) { //Load word
 	i := instruction.Imm_se()
 	s := instruction.S()
 	t := instruction.T()
+	t_reg := RegIn(t)
 
 	addr := Wrapping_add(c.reg[s], i, 32)
 
 	v := c.Load32(addr)
-	c.Setreg(t, v)
+	
+	c.load.Load(t_reg,v)
 }
 
 func (c *CPU) Store32(addr uint32, val uint32) {
@@ -251,6 +266,11 @@ func (c *CPU) Run_next(inst Instruction) {
 	c.next.op = c.Load32(c.pc)       //Grab inst
 	c.pc = Wrapping_add(c.pc, 4, 32) //Increment PC
 	c.Decode_and_execute(inst)
+	
+	c.Set_reg(c.load.r, c.load.val)
+	c.load.Load(0,0)
+	c.Decode_and_execute(inst)
+	c.reg = c.out_reg
 }
 
 func (c *CPU) Load32(addr uint32) uint32 { //load 32-bit from inter
