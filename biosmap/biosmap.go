@@ -31,6 +31,24 @@ var CACHECONTROL = Range{
 	bit:     4,
 }
 
+var RAM = Range{
+	address: 0xa0000000,
+	bit:     2 * 1024 * 1024,
+}
+
+var REGION_MASK = [8]uint32{0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, //KUSEG : 2048MB
+	// KSEG0 : 512MB
+	0x7fffffff,
+	// KSEG1 : 512MB
+	0x1fffffff,
+	// KSEG2 : 1024MB
+	0xffffffff, 0xffffffff}
+
+var SPU = Range{
+	address: 0x1f801c00,
+	bit:     640,
+}
+
 func (r Range) Contains(addr uint32) *uint32 { //Return offset if it exists
 	if addr >= r.address && addr < r.address+r.bit {
 		option := addr - r.address
@@ -79,4 +97,23 @@ func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in addre
 	}
 
 	panic(fmt.Sprintf("Unhandled store32 into address: 0x%08x", addr))
+}
+
+func (i *Interconnect) Store16(addr uint32, val uint16) {
+	if addr%4 != 0 {
+		panic(fmt.Sprintf("Unhandled Store16 address: 0x%08x", addr))
+	}
+
+	abaddr := Mask_region(addr)
+
+	if offset := SPU.Contains(abaddr); offset != nil {
+		panic(fmt.Sprintf("Unhandled Write to Register: 0x%08x", val))
+	}
+
+	panic(fmt.Sprintf("Unhandled Store16 into address: 0x%08x", addr))
+}
+
+func Mask_region(addr uint32) uint32 {
+	index := addr >> 29
+	return addr & REGION_MASK[index]
 }
