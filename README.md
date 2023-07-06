@@ -1,4 +1,4 @@
-# GSX Emulator
+# GPSXE
 
 This is a work-in-progress Sony PlayStation emulator project coded in the Go programming language, aimed at providing a platform to run PlayStation games on modern hardware.
 
