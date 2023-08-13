@@ -9,7 +9,7 @@ func (i Instruction) Function() uint32 {
 }
 
 func (i Instruction) S() uint32 {
-	return (i.op >> 21) & 0x1F
+	return (i.op >> 21) & 0x1f
 }
 
 func (i Instruction) T() uint32 {

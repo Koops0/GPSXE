@@ -43,3 +43,7 @@ func (b *BIOS) Load32(offset uint32) uint32 {
 	res := b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
 	return res
 }
+
+func (b *BIOS) Load8(offset uint32) uint8 {
+	return b.data[offset]
+}

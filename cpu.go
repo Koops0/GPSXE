@@ -214,7 +214,7 @@ func (c *CPU) Opaddi(inst Instruction) { //Add unsigned imm, check for overflow
 }
 
 func (c *CPU) Oplw(inst Instruction) { //Load word
-	if c.sr&0x10000 != 0 {
+	if c.sr & 0x10000 != 0 {
 		fmt.Println("ignoring store while cache is isolated")
 		return
 	}
@@ -253,7 +253,7 @@ func (c *CPU) Opaddu(inst Instruction) { //Add unsigned
 }
 
 func (c *CPU) Opsh(inst Instruction) { //Store Halfword
-	if c.sr&0x10000 != 0 {
+	if c.sr & 0x10000 != 0 {
 		fmt.Println("ignoring store while cache is isolated")
 		return
 	}
@@ -283,12 +283,105 @@ func (c *CPU) Opandi(inst Instruction) { //Jump and Link
 	c.Setreg(t, v)
 }
 
+func (c *CPU) Opsb(inst Instruction) { //Store byte
+	if c.sr & 0x10000 != 0 {
+		fmt.Println("ignoring store while cache is isolated")
+		return
+	}
+
+	i := inst.Imm_se()
+	s := inst.S()
+	t := inst.T()
+
+	addr := Wrapping_add(c.reg[s], i, 32)
+	v := c.reg[t]
+
+	c.Store8(addr, uint8(v))
+}
+
+func (c *CPU) Opjr(inst Instruction) { //Jump
+	s := inst.S()
+	c.pc = c.reg[s]
+}
+
+func (c *CPU) Oplb(inst Instruction) { //Load byte
+	i := inst.Imm_se()
+	s := inst.S()
+	t := inst.T()
+
+	addr := Wrapping_add(c.reg[s], i, 32)
+	v := int8(c.Load8(addr)) //cast as int8
+
+	c.load.Load(RegIn(t), uint32(v))
+}
+
+func (c *CPU) Opbeq(inst Instruction) { //Branch if equal
+	i := inst.Imm_se()
+	s := inst.S()
+	t := inst.T()
+
+	if c.reg[s] == c.reg[t]{
+		c.Branch(i)
+	}
+}
+
+func (c *CPU) Opmfc0(inst Instruction) { //Coprocessor 0
+	cpu_r := inst.T()
+	cop_r := inst.D()
+
+	switch cop_r{
+	case 12:
+		c.sr = cop_r
+	case 13:
+		panic(fmt.Sprintf("Unhandled read from CAUSE reg."))
+	default:
+		panic(fmt.Sprintf("Unhandled read from cop_r"))
+	}
+
+	v := cop_r
+
+	c.load.Load(RegIn(cpu_r), v)
+}
+
+func (c *CPU) Opand(inst Instruction) { //Bit and
+	d := inst.D()
+	s := inst.S()
+	t := inst.T()
+	
+	v := c.reg[s]+c.reg[t]
+	c.Setreg(d,v)
+}
+
+func (c *CPU) Opadd(inst Instruction) { //Bit add
+	d := inst.D()
+	s := inst.S()
+	t := inst.T()
+	
+	ss := int32(c.reg[s])
+	tt := int32(c.reg[t])
+	res,err := Checkedadd(ss,tt)
+
+	if err != nil{
+		panic(fmt.Sprintf("ADD OVERFLOW"))
+	}
+
+	c.Setreg(d, uint32(res))
+}
+
 func (c *CPU) Store32(addr uint32, val uint32) {
 	c.inter.Store32(addr, val)
 }
 
 func (c *CPU) Store16(addr uint32, val uint16) {
 	c.inter.Store16(addr, val)
+}
+
+func (c *CPU) Store8(addr uint32, val uint8) {
+	c.inter.Store8(addr, val)
+}
+
+func (c *CPU) Load8(addr uint32) uint8{
+	return c.inter.Load8(addr)
 }
 
 func (c *CPU) Decode_and_execute(inst Instruction) {
@@ -303,17 +396,46 @@ func (c *CPU) Decode_and_execute(inst Instruction) {
 		c.Opaddiu(inst)
 	case 0b101111:
 		c.Opj(inst)
-	case 0b100000:
-		c.Opor(inst)
+	case 0b100000: //Subfunction
+		switch inst.Subfunction() {
+		case 0b100101:
+			c.Opor(inst)
+		case 0b011110:
+			c.Oplb(inst)
+		case 0b000000:
+			c.Opmfc0(inst)
+		case 0b100100:
+			c.Opand(inst)
+		default:
+			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
+		}
 	case 0b010000:
 		c.Opcop0(inst)
 	case 0b101010:
 		c.Opbne(inst)
-	case 0b100001:
-		c.Opaddi(inst)
-		c.Opsltu(inst)
-	case 0b100011:
+	case 0b100001: //subfunction
+		switch inst.Subfunction() {
+		case 0b010010:
+			c.Opaddi(inst)
+		case 0b100001:
+			c.Opsltu(inst)
+		case 0b001010:
+			c.Opadd(inst)
+		default:
+			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
+		}
+	case 0b100011: //sub
 		c.Oplw(inst)
+		switch inst.Subfunction() {
+		case 0b010000:
+			c.Oplw(inst)
+		case 0b011110:
+			c.Oplb(inst)
+		case 0b110000:
+			c.Opbeq(inst)
+		default:
+			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
+		}
 	case 0b111010:
 		c.Opaddu(inst)
 	case 0b101001:
@@ -322,7 +444,10 @@ func (c *CPU) Decode_and_execute(inst Instruction) {
 		c.Opjal(inst)
 	case 0b110000:
 		c.Opandi(inst)
-
+	case 0b101000:
+		c.Opsb(inst)
+	case 0b111110:
+		c.Opjr(inst)
 	case 0b000000:
 		switch inst.Subfunction() {
 		case 0b000000:

@@ -2,8 +2,8 @@ package biosmap
 
 import (
 	"fmt"
-
 	"../bios"
+	"../ram"
 )
 
 type Range struct {
@@ -49,6 +49,16 @@ var SPU = Range{
 	bit:     640,
 }
 
+var EX2 = Range{
+	address: 0x1f802000,
+	bit:     66,
+}
+
+var EX1 = Range{
+	address: 0x1f00000,
+	bit:     66,
+}
+
 func (r Range) Contains(addr uint32) *uint32 { //Return offset if it exists
 	if addr >= r.address && addr < r.address+r.bit {
 		option := addr - r.address
@@ -60,6 +70,7 @@ func (r Range) Contains(addr uint32) *uint32 { //Return offset if it exists
 
 type Interconnect struct {
 	bios bios.BIOS
+	ram ram.RAM
 }
 
 func (i Interconnect) New(bios *bios.BIOS) Interconnect {
@@ -75,6 +86,24 @@ func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
 	} else {
 		return 0
 	}
+}
+
+func (i *Interconnect) Load8(addr uint32) uint8{
+	abaddr := Mask_region(addr)
+
+	if offset := RAM.Contains(abaddr); offset != nil {
+		return i.ram.Load8(*offset)
+	}
+
+	if offset := BIOS.Contains(abaddr); offset != nil {
+		return i.bios.Load8(*offset)
+	}
+
+	if offset := EX1.Contains(abaddr); offset == nil{
+		return 0xff
+	}
+
+	panic(fmt.Sprintf("Unhandled Load8 at address: 0x%08x", addr))
 }
 
 func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in address
@@ -111,6 +140,20 @@ func (i *Interconnect) Store16(addr uint32, val uint16) {
 	}
 
 	panic(fmt.Sprintf("Unhandled Store16 into address: 0x%08x", addr))
+}
+
+func (i *Interconnect) Store8(addr uint32, val uint8) {
+	abaddr := Mask_region(addr)
+
+	if offset := RAM.Contains(abaddr); offset != nil {
+		i.ram.Store8(*offset, val)
+	}
+
+	if offset := EX2.Contains(abaddr); offset != nil {
+		panic(fmt.Sprintf("Unhandled Write to EX2 Register: 0x%08x", val))
+	}
+
+	panic(fmt.Sprintf("Unhandled Store8 into address: 0x%08x", addr))
 }
 
 func Mask_region(addr uint32) uint32 {

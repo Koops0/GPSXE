@@ -1,4 +1,4 @@
-package main
+package ram
 
 type RAM struct {
 	data []uint8
@@ -18,6 +18,10 @@ func (r *RAM) Load32(offset uint32) uint32 { //Fetch word at offset
 	return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
 }
 
+func (r *RAM) Load8(offset uint32) uint8 { //Fetch word at offset
+	return r.data[offset]
+}
+
 func (r *RAM) Store32(offset uint32, val uint32) { //Store val into offset
 	b0 := uint8(val)
 	b1 := uint8(val >> 8)
@@ -28,4 +32,8 @@ func (r *RAM) Store32(offset uint32, val uint32) { //Store val into offset
 	r.data[offset+1] = b1
 	r.data[offset+2] = b2
 	r.data[offset+3] = b3
+}
+
+func (r *RAM) Store8(offset uint32, val uint8) { //Store val into offset
+	r.data[offset] = val
 }
