@@ -25,6 +25,8 @@ type CPU struct {
 	inter   biosmap.Interconnect //Interface
 	sr      uint32               //Stat register
 	load    Load
+	hi		uint32
+	lo	    uint32
 }
 
 func (c *CPU) New(inter biosmap.Interconnect) {
@@ -35,6 +37,8 @@ func (c *CPU) New(inter biosmap.Interconnect) {
 	c.sr = 0
 	c.out_reg = c.reg
 	c.load.Load(0, 0)
+	c.hi = 0xdeadbeef
+	c.lo = 0xdeadbeef
 }
 
 func (c CPU) Reg(index uint32) uint32 {
@@ -214,7 +218,7 @@ func (c *CPU) Opaddi(inst Instruction) { //Add unsigned imm, check for overflow
 }
 
 func (c *CPU) Oplw(inst Instruction) { //Load word
-	if c.sr & 0x10000 != 0 {
+	if c.sr&0x10000 != 0 {
 		fmt.Println("ignoring store while cache is isolated")
 		return
 	}
@@ -235,6 +239,7 @@ func (c *CPU) Opsltu(inst Instruction) { //Set on less than unsigned
 	d := inst.D()
 	t := inst.T()
 	s := inst.S()
+
 	v := c.reg[s] < c.reg[t]
 	u := 0
 
@@ -253,7 +258,7 @@ func (c *CPU) Opaddu(inst Instruction) { //Add unsigned
 }
 
 func (c *CPU) Opsh(inst Instruction) { //Store Halfword
-	if c.sr & 0x10000 != 0 {
+	if c.sr&0x10000 != 0 {
 		fmt.Println("ignoring store while cache is isolated")
 		return
 	}
@@ -284,7 +289,7 @@ func (c *CPU) Opandi(inst Instruction) { //Jump and Link
 }
 
 func (c *CPU) Opsb(inst Instruction) { //Store byte
-	if c.sr & 0x10000 != 0 {
+	if c.sr&0x10000 != 0 {
 		fmt.Println("ignoring store while cache is isolated")
 		return
 	}
@@ -320,7 +325,7 @@ func (c *CPU) Opbeq(inst Instruction) { //Branch if equal
 	s := inst.S()
 	t := inst.T()
 
-	if c.reg[s] == c.reg[t]{
+	if c.reg[s] == c.reg[t] {
 		c.Branch(i)
 	}
 }
@@ -329,7 +334,7 @@ func (c *CPU) Opmfc0(inst Instruction) { //Coprocessor 0
 	cpu_r := inst.T()
 	cop_r := inst.D()
 
-	switch cop_r{
+	switch cop_r {
 	case 12:
 		c.sr = cop_r
 	case 13:
@@ -347,25 +352,210 @@ func (c *CPU) Opand(inst Instruction) { //Bit and
 	d := inst.D()
 	s := inst.S()
 	t := inst.T()
-	
-	v := c.reg[s]+c.reg[t]
-	c.Setreg(d,v)
+
+	v := c.reg[s] + c.reg[t]
+	c.Setreg(d, v)
 }
 
 func (c *CPU) Opadd(inst Instruction) { //Bit add
 	d := inst.D()
 	s := inst.S()
 	t := inst.T()
-	
+
 	ss := int32(c.reg[s])
 	tt := int32(c.reg[t])
-	res,err := Checkedadd(ss,tt)
+	res, err := Checkedadd(ss, tt)
 
-	if err != nil{
+	if err != nil {
 		panic(fmt.Sprintf("ADD OVERFLOW"))
 	}
 
 	c.Setreg(d, uint32(res))
+}
+
+func (c *CPU) Opbgtz(inst Instruction) { //Branch if > 0
+	i := inst.Imm_se()
+	s := inst.S()
+
+	v := int32(c.reg[s])
+	if v > 0 {
+		c.Branch(i)
+	}
+}
+
+func (c *CPU) Opbletz(inst Instruction) { //Branch if </= 0
+	i := inst.Imm_se()
+	s := inst.S()
+
+	v := int32(c.reg[s])
+	if v <= 0 {
+		c.Branch(i)
+	}
+}
+
+func (c *CPU) Oplbu(inst Instruction) { //Load unsigned byte
+	i := inst.Imm_se()
+	t := inst.T()
+	s := inst.S()
+
+	addr := Wrapping_add(c.reg[s], i, 32)
+	v := c.Load8(addr)
+	c.load.Load(RegIn(t), uint32(v))
+}
+
+func (c *CPU) Opjalr(inst Instruction) { //Jump+Link
+	d := inst.D()
+	s := inst.S()
+
+	ra := c.pc
+
+	c.Setreg(d, ra)
+	c.pc = c.reg[s]
+}
+
+func (c *CPU) Opbxx(inst Instruction) { //Tons of inst
+	i := inst.Imm_se()
+	s := inst.S()
+
+	instruction := inst.op
+	is_bgez := (instruction >> 16) & 1
+	is_link := (instruction>>20)&1 != 0
+
+	v := uint32(c.reg[s])
+
+	test := uint32(0)
+	if v < 0 {
+		test = 1
+	}
+	test = test ^ is_bgez
+
+	if test != 0 {
+		if is_link {
+			ra := c.pc
+			c.Set_reg(RegIn(31), ra)
+		} else {
+			c.Branch(i)
+		}
+	}
+}
+
+func (c *CPU) Opslti(inst Instruction) { //set if less than imm
+	i := int32(inst.Imm_se())
+	s := inst.S()
+	t := inst.T()
+
+	v := int32(c.reg[s]) < i
+
+	x := 0
+	if v{
+		x = 1
+	}
+
+	c.Setreg(t, uint32(x))
+}
+
+func (c *CPU) Opsubu(inst Instruction) { //sub unsigned
+	s := inst.S()
+	t := inst.T()
+	d := inst.D()
+
+	v := Wrapping_sub(c.reg[s], c.reg[t], 32)
+
+	c.Setreg(d,v)
+}
+
+func (c *CPU) Opsra(inst Instruction) { //shift right arithmetic
+	i := inst.Shift()
+	t := inst.T()
+	d := inst.D()
+
+	v := int32(c.reg[t]) >> i
+
+	c.Setreg(d,uint32(v))
+}
+
+func (c *CPU) Opdiv(inst Instruction) { //divide
+	s := inst.S()
+	t := inst.T()
+	n := int32(c.reg[s])
+	d := int32(c.reg[t])
+
+	if d == 0{ //divide by 0
+		c.hi = uint32(n)
+
+		if n >= 0{
+			c.lo = 0xffffffff
+		}else{
+			c.lo = 1
+		}
+	}else if uint32(n) == 0x80000000 && d == -1{ //unsigned
+		c.hi = 0
+		c.lo = 0x80000000
+	}else{
+		c.hi = uint32(n%d)
+		c.lo = uint32(n/d)
+	}
+}
+
+func (c *CPU) Opmflo(inst Instruction) { //move from lo
+	d := inst.D()
+	lo := c.lo
+	c.Setreg(d,lo)
+}
+
+func (c *CPU) Opsrl(inst Instruction) { //shift right logical
+	i := inst.Shift()
+	t := inst.T()
+	d := inst.D()
+
+	v := c.reg[t] >> i
+
+	c.Setreg(d,v)
+}
+
+func (c *CPU) Opsltiu(inst Instruction) { //set less than imm unsigned
+	i := inst.Imm_se()
+	s := inst.S()
+	t := inst.T()
+
+	v := c.reg[s] << i
+
+	c.Setreg(t,v)
+}
+
+func (c *CPU) Opdivu(inst Instruction) { //divide unsigned
+	s := inst.S()
+	t := inst.T()
+	n := c.reg[s]
+	d := c.reg[t]
+
+	if d == 0{ //divide by 0
+		c.hi = n
+		c.lo = 0xffffffff
+	}else{
+		c.hi = n%d
+		c.lo = n/d
+	}
+}
+
+func (c *CPU) Opmfhi(inst Instruction) { //move from hi
+	d := inst.D()
+	hi := c.hi
+	c.Setreg(d,hi)
+}
+
+func (c *CPU) Opslt(inst Instruction) { //set on less signed
+	d := inst.D()
+	t := inst.T()
+	s := inst.S()
+
+	v := int32(c.reg[s]) < int32(c.reg[t])
+	u := 0
+
+	if v == true {
+		u = 1
+	}
+	c.Setreg(d, uint32(u))
 }
 
 func (c *CPU) Store32(addr uint32, val uint32) {
@@ -380,7 +570,7 @@ func (c *CPU) Store8(addr uint32, val uint8) {
 	c.inter.Store8(addr, val)
 }
 
-func (c *CPU) Load8(addr uint32) uint8{
+func (c *CPU) Load8(addr uint32) uint8 {
 	return c.inter.Load8(addr)
 }
 
@@ -406,6 +596,8 @@ func (c *CPU) Decode_and_execute(inst Instruction) {
 			c.Opmfc0(inst)
 		case 0b100100:
 			c.Opand(inst)
+		case 0b000111:
+			c.Opjalr(inst)
 		default:
 			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
 		}
@@ -421,11 +613,12 @@ func (c *CPU) Decode_and_execute(inst Instruction) {
 			c.Opsltu(inst)
 		case 0b001010:
 			c.Opadd(inst)
+		case 0b001100:
+			c.Opsra(inst)
 		default:
 			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
 		}
 	case 0b100011: //sub
-		c.Oplw(inst)
 		switch inst.Subfunction() {
 		case 0b010000:
 			c.Oplw(inst)
@@ -443,11 +636,57 @@ func (c *CPU) Decode_and_execute(inst Instruction) {
 	case 0b111111:
 		c.Opjal(inst)
 	case 0b110000:
-		c.Opandi(inst)
+		switch inst.Subfunction() {
+		case 0b100001:
+			c.Opandi(inst)
+		case 0b100000:
+			c.Opdiv(inst)
+		case 0b001001:
+			c.Opmflo(inst)
+		default:
+			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
+		}		
 	case 0b101000:
-		c.Opsb(inst)
+		switch inst.Subfunction() {
+		case 0b011100:
+			c.Opsb(inst)
+		case 0b100000:
+			c.Opslti(inst)
+		default:
+			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
+		}
 	case 0b111110:
 		c.Opjr(inst)
+	case 0b111001:
+		c.Opbgtz(inst)
+	case 0b110001:
+		c.Opbletz(inst)
+	case 0b100100:
+		switch inst.Subfunction() {
+		case 0b001010:
+			c.Oplbu(inst)
+		case 0b000000:
+			c.Opbxx(inst)
+		default:
+			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
+		}
+	case 0b111000:
+		c.Opsubu(inst)
+	case 0b101011:
+		c.Opsrl(inst)
+	case 0b101100:
+		c.Opsltiu(inst)
+	case 0b110010:
+		switch inst.Subfunction() {
+		case 0b000000:
+			c.Opdivu(inst)
+		case 0b000001:
+			c.Opmfhi(inst)
+		default:
+			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
+		}
+	case 0b110011:
+		c.Opslt(inst)
 	case 0b000000:
 		switch inst.Subfunction() {
 		case 0b000000:

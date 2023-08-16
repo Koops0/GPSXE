@@ -2,6 +2,7 @@ package biosmap
 
 import (
 	"fmt"
+
 	"../bios"
 	"../ram"
 )
@@ -55,8 +56,13 @@ var EX2 = Range{
 }
 
 var EX1 = Range{
-	address: 0x1f00000,
+	address: 0x1f000000,
 	bit:     66,
+}
+
+var IRQ_CONTROL = Range{
+	address: 0x1f801070,
+	bit:     8,
 }
 
 func (r Range) Contains(addr uint32) *uint32 { //Return offset if it exists
@@ -70,7 +76,7 @@ func (r Range) Contains(addr uint32) *uint32 { //Return offset if it exists
 
 type Interconnect struct {
 	bios bios.BIOS
-	ram ram.RAM
+	ram  ram.RAM
 }
 
 func (i Interconnect) New(bios *bios.BIOS) Interconnect {
@@ -83,12 +89,15 @@ func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
 		panic("error!!!!")
 	} else if offset := BIOS.Contains(addr); offset != nil {
 		return i.bios.Load32(*offset)
+	} else if offset := IRQ_CONTROL.Contains(addr); offset != nil {
+			fmt.Println("IRQ Control")
+			return 0
 	} else {
 		return 0
 	}
 }
 
-func (i *Interconnect) Load8(addr uint32) uint8{
+func (i *Interconnect) Load8(addr uint32) uint8 {
 	abaddr := Mask_region(addr)
 
 	if offset := RAM.Contains(abaddr); offset != nil {
@@ -99,7 +108,7 @@ func (i *Interconnect) Load8(addr uint32) uint8{
 		return i.bios.Load8(*offset)
 	}
 
-	if offset := EX1.Contains(abaddr); offset == nil{
+	if offset := EX1.Contains(abaddr); offset == nil {
 		return 0xff
 	}
 
@@ -122,6 +131,9 @@ func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in addre
 		default:
 			fmt.Println("Unhandled write to MEM_CONTROL register")
 		}
+		return
+	} else if offset := IRQ_CONTROL.Contains(addr); offset != nil {
+		fmt.Println("IRQ Control")
 		return
 	}
 
