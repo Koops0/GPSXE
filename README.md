@@ -49,7 +49,7 @@ Contributions to basic-emu are welcome and appreciated. If you would like to con
 
 ## License
 
-basic-emu is licensed under the MIT License. Please review the license file for more information about the permissions and limitations it provides.
+GPSXE is licensed under the MIT License. Please review the license file for more information about the permissions and limitations it provides.
 
 ## Special Thanks
 
