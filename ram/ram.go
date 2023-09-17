@@ -34,6 +34,14 @@ func (r *RAM) Store32(offset uint32, val uint32) { //Store val into offset
 	r.data[offset+3] = b3
 }
 
+func (r *RAM) Store16(offset uint32, val uint16) { //Store val into offset
+	b0 := uint8(val)
+	b1 := uint8(val >> 8)
+
+	r.data[offset] = b0
+	r.data[offset+1] = b1
+}
+
 func (r *RAM) Store8(offset uint32, val uint8) { //Store val into offset
 	r.data[offset] = val
 }

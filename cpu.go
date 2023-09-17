@@ -18,20 +18,37 @@ func (l *Load) Load(reg RegIn, value uint32) {
 }
 
 type CPU struct {
-	pc      uint32      //Program Counter
-	next    Instruction //next inst
-	reg     [32]uint32
-	out_reg [32]uint32           //2nd set
-	inter   biosmap.Interconnect //Interface
-	sr      uint32               //Stat register
-	load    Load
-	hi		uint32
-	lo	    uint32
+	pc         uint32      //Program Counter
+	next_pc    uint32      //Next val
+	next       Instruction //next inst
+	reg        [32]uint32
+	out_reg    [32]uint32           //2nd set
+	inter      biosmap.Interconnect //Interface
+	sr         uint32               //Stat register
+	load       Load
+	hi         uint32
+	lo         uint32
+	current_pc uint32 //Inst address
+	cause      uint32 //Cop0 13
+	epc        uint32 //Cop0 14
+	branch     bool   //if branch occured
+	delay_slot bool   //if inst executes
 }
+
+type Exception uint32
+
+const (
+	SysCall            = 0x8
+	Overflow           = 0xc
+	LoadAddressError   = 0x4
+	StoreAddressError  = 0x5
+	IllegalInstruction = 0xa
+)
 
 func (c *CPU) New(inter biosmap.Interconnect) {
 	c.reg[0] = 0
 	c.pc = 0xbfc00000 //reset val
+	c.next_pc = Wrapping_add(c.pc, 4, 32)
 	c.inter = inter
 	c.next.op = 0x0
 	c.sr = 0
@@ -39,6 +56,8 @@ func (c *CPU) New(inter biosmap.Interconnect) {
 	c.load.Load(0, 0)
 	c.hi = 0xdeadbeef
 	c.lo = 0xdeadbeef
+	c.branch = false
+	c.delay_slot = false
 }
 
 func (c CPU) Reg(index uint32) uint32 {
@@ -126,7 +145,12 @@ func (c *CPU) Opsw(inst Instruction) { //stores word
 	s := inst.S()
 	addr := c.reg[s] + i
 	v := c.reg[t]
-	c.Store32(addr, v)
+
+	if addr%4 == 0 {
+		c.Store32(addr, v)
+	} else {
+		c.Exception(StoreAddressError)
+	}
 }
 
 func (c *CPU) Opsll(inst Instruction) { //Shift Left
@@ -159,6 +183,26 @@ func (c *CPU) Opor(inst Instruction) { //Or
 	c.Setreg(d, v)
 }
 
+func (c *CPU) Opmfc0(inst Instruction) { //Coprocessor 0
+	cpu_r := inst.T()
+	cop_r := inst.D()
+
+	switch cop_r {
+	case 12:
+		c.sr = cop_r
+	case 13:
+		c.cause = cop_r
+	case 14:
+		c.epc = cop_r
+	default:
+		panic(fmt.Sprintf("Unhandled read from cop_r"))
+	}
+
+	v := cop_r
+
+	c.load.Load(RegIn(cpu_r), v)
+}
+
 func (c *CPU) Opmtc0(inst Instruction) { //Or
 	cpu_r := inst.T()
 	cop_r := inst.D()
@@ -180,10 +224,24 @@ func (c *CPU) Opmtc0(inst Instruction) { //Or
 	}
 }
 
+func (c *CPU) Oprfe(inst Instruction) { //Return from Exception
+	if inst.op&0x3f != 0b010000 {
+		panic(fmt.Sprintf("Invalid COP inst: %x", inst))
+	}
+
+	mode := c.sr & 0x3f //Shift interrupt
+	c.sr &^= 0x3f
+	c.sr |= mode >> 2
+
+}
 func (c *CPU) Opcop0(inst Instruction) {
 	switch inst.S() {
-	case 0b01000:
+	case 0b00000:
+		c.Opmfc0(inst)
+	case 0b00100:
 		c.Opmtc0(inst)
+	case 0b10000:
+		c.Oprfe(inst)
 	default:
 		panic(fmt.Sprintf("Unhandled COP inst: %x", inst))
 	}
@@ -209,12 +267,10 @@ func (c *CPU) Opaddi(inst Instruction) { //Add unsigned imm, check for overflow
 	res, err := Checkedadd(v, i)
 
 	if err != nil {
-		panic("ADDI OVERFLOW")
+		c.Exception(Overflow)
 	} else {
-		s = uint32(res)
+		c.Setreg(t, uint32(res))
 	}
-
-	c.Setreg(t, s)
 }
 
 func (c *CPU) Oplw(inst Instruction) { //Load word
@@ -230,9 +286,12 @@ func (c *CPU) Oplw(inst Instruction) { //Load word
 
 	addr := Wrapping_add(c.reg[s], i, 32)
 
-	v := c.Load32(addr)
-
-	c.load.Load(t_reg, v)
+	if addr%4 == 0 {
+		v := c.Load32(addr)
+		c.load.Load(t_reg, v)
+	} else {
+		c.Exception(LoadAddressError)
+	}
 }
 
 func (c *CPU) Opsltu(inst Instruction) { //Set on less than unsigned
@@ -271,7 +330,11 @@ func (c *CPU) Opsh(inst Instruction) { //Store Halfword
 
 	v := c.reg[t]
 
-	c.Store16(addr, uint16(v))
+	if addr%2 == 0 {
+		c.Store16(addr, uint16(v))
+	} else {
+		c.Exception(StoreAddressError)
+	}
 }
 
 func (c *CPU) Opjal(inst Instruction) { //Jump and Link
@@ -330,24 +393,6 @@ func (c *CPU) Opbeq(inst Instruction) { //Branch if equal
 	}
 }
 
-func (c *CPU) Opmfc0(inst Instruction) { //Coprocessor 0
-	cpu_r := inst.T()
-	cop_r := inst.D()
-
-	switch cop_r {
-	case 12:
-		c.sr = cop_r
-	case 13:
-		panic(fmt.Sprintf("Unhandled read from CAUSE reg."))
-	default:
-		panic(fmt.Sprintf("Unhandled read from cop_r"))
-	}
-
-	v := cop_r
-
-	c.load.Load(RegIn(cpu_r), v)
-}
-
 func (c *CPU) Opand(inst Instruction) { //Bit and
 	d := inst.D()
 	s := inst.S()
@@ -367,10 +412,10 @@ func (c *CPU) Opadd(inst Instruction) { //Bit add
 	res, err := Checkedadd(ss, tt)
 
 	if err != nil {
-		panic(fmt.Sprintf("ADD OVERFLOW"))
+		c.Exception(Overflow)
+	} else {
+		c.Setreg(d, uint32(res))
 	}
-
-	c.Setreg(d, uint32(res))
 }
 
 func (c *CPU) Opbgtz(inst Instruction) { //Branch if > 0
@@ -447,7 +492,7 @@ func (c *CPU) Opslti(inst Instruction) { //set if less than imm
 	v := int32(c.reg[s]) < i
 
 	x := 0
-	if v{
+	if v {
 		x = 1
 	}
 
@@ -461,7 +506,7 @@ func (c *CPU) Opsubu(inst Instruction) { //sub unsigned
 
 	v := Wrapping_sub(c.reg[s], c.reg[t], 32)
 
-	c.Setreg(d,v)
+	c.Setreg(d, v)
 }
 
 func (c *CPU) Opsra(inst Instruction) { //shift right arithmetic
@@ -471,7 +516,7 @@ func (c *CPU) Opsra(inst Instruction) { //shift right arithmetic
 
 	v := int32(c.reg[t]) >> i
 
-	c.Setreg(d,uint32(v))
+	c.Setreg(d, uint32(v))
 }
 
 func (c *CPU) Opdiv(inst Instruction) { //divide
@@ -480,27 +525,27 @@ func (c *CPU) Opdiv(inst Instruction) { //divide
 	n := int32(c.reg[s])
 	d := int32(c.reg[t])
 
-	if d == 0{ //divide by 0
+	if d == 0 { //divide by 0
 		c.hi = uint32(n)
 
-		if n >= 0{
+		if n >= 0 {
 			c.lo = 0xffffffff
-		}else{
+		} else {
 			c.lo = 1
 		}
-	}else if uint32(n) == 0x80000000 && d == -1{ //unsigned
+	} else if uint32(n) == 0x80000000 && d == -1 { //unsigned
 		c.hi = 0
 		c.lo = 0x80000000
-	}else{
-		c.hi = uint32(n%d)
-		c.lo = uint32(n/d)
+	} else {
+		c.hi = uint32(n % d)
+		c.lo = uint32(n / d)
 	}
 }
 
 func (c *CPU) Opmflo(inst Instruction) { //move from lo
 	d := inst.D()
 	lo := c.lo
-	c.Setreg(d,lo)
+	c.Setreg(d, lo)
 }
 
 func (c *CPU) Opsrl(inst Instruction) { //shift right logical
@@ -510,7 +555,7 @@ func (c *CPU) Opsrl(inst Instruction) { //shift right logical
 
 	v := c.reg[t] >> i
 
-	c.Setreg(d,v)
+	c.Setreg(d, v)
 }
 
 func (c *CPU) Opsltiu(inst Instruction) { //set less than imm unsigned
@@ -520,7 +565,7 @@ func (c *CPU) Opsltiu(inst Instruction) { //set less than imm unsigned
 
 	v := c.reg[s] << i
 
-	c.Setreg(t,v)
+	c.Setreg(t, v)
 }
 
 func (c *CPU) Opdivu(inst Instruction) { //divide unsigned
@@ -529,19 +574,19 @@ func (c *CPU) Opdivu(inst Instruction) { //divide unsigned
 	n := c.reg[s]
 	d := c.reg[t]
 
-	if d == 0{ //divide by 0
+	if d == 0 { //divide by 0
 		c.hi = n
 		c.lo = 0xffffffff
-	}else{
-		c.hi = n%d
-		c.lo = n/d
+	} else {
+		c.hi = n % d
+		c.lo = n / d
 	}
 }
 
 func (c *CPU) Opmfhi(inst Instruction) { //move from hi
 	d := inst.D()
 	hi := c.hi
-	c.Setreg(d,hi)
+	c.Setreg(d, hi)
 }
 
 func (c *CPU) Opslt(inst Instruction) { //set on less signed
@@ -556,6 +601,25 @@ func (c *CPU) Opslt(inst Instruction) { //set on less signed
 		u = 1
 	}
 	c.Setreg(d, uint32(u))
+}
+
+func (c *CPU) Opmtlo(inst Instruction) { //Move to LO
+	s := inst.S()
+	c.lo = c.Reg(s)
+}
+
+func (c *CPU) Opmthi(inst Instruction) { //Move to LO
+	s := inst.S()
+	c.hi = c.Reg(s)
+}
+
+func (c *CPU) Opsyscall(Instruction) { //Syscall
+	c.Exception(SysCall)
+}
+
+func (c *CPU) Opillegal(inst Instruction) { //Syscall
+	fmt.Sprintf("Illegal instruction: %x", inst)
+	c.Exception(IllegalInstruction)
 }
 
 func (c *CPU) Store32(addr uint32, val uint32) {
@@ -576,134 +640,164 @@ func (c *CPU) Load8(addr uint32) uint8 {
 
 func (c *CPU) Decode_and_execute(inst Instruction) {
 	switch inst.Function() {
-	case 0b001111:
-		c.Oplui(inst)
-	case 0b001101:
-		c.Opori(inst)
-	case 0b001011:
-		c.Opsw(inst)
-	case 0b001001:
-		c.Opaddiu(inst)
-	case 0b101111:
-		c.Opj(inst)
-	case 0b100000: //Subfunction
-		switch inst.Subfunction() {
-		case 0b100101:
-			c.Opor(inst)
-		case 0b011110:
-			c.Oplb(inst)
-		case 0b000000:
-			c.Opmfc0(inst)
-		case 0b100100:
-			c.Opand(inst)
-		case 0b000111:
-			c.Opjalr(inst)
-		default:
-			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
-		}
-	case 0b010000:
-		c.Opcop0(inst)
-	case 0b101010:
-		c.Opbne(inst)
-	case 0b100001: //subfunction
-		switch inst.Subfunction() {
-		case 0b010010:
-			c.Opaddi(inst)
-		case 0b100001:
-			c.Opsltu(inst)
-		case 0b001010:
-			c.Opadd(inst)
-		case 0b001100:
-			c.Opsra(inst)
-		default:
-			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
-		}
-	case 0b100011: //sub
-		switch inst.Subfunction() {
-		case 0b010000:
-			c.Oplw(inst)
-		case 0b011110:
-			c.Oplb(inst)
-		case 0b110000:
-			c.Opbeq(inst)
-		default:
-			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
-		}
-	case 0b111010:
-		c.Opaddu(inst)
-	case 0b101001:
-		c.Opsh(inst)
-	case 0b111111:
-		c.Opjal(inst)
-	case 0b110000:
-		switch inst.Subfunction() {
-		case 0b100001:
-			c.Opandi(inst)
-		case 0b100000:
-			c.Opdiv(inst)
-		case 0b001001:
-			c.Opmflo(inst)
-		default:
-			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
-		}		
-	case 0b101000:
-		switch inst.Subfunction() {
-		case 0b011100:
-			c.Opsb(inst)
-		case 0b100000:
-			c.Opslti(inst)
-		default:
-			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
-		}
-	case 0b111110:
-		c.Opjr(inst)
-	case 0b111001:
-		c.Opbgtz(inst)
-	case 0b110001:
-		c.Opbletz(inst)
-	case 0b100100:
-		switch inst.Subfunction() {
-		case 0b001010:
-			c.Oplbu(inst)
-		case 0b000000:
-			c.Opbxx(inst)
-		default:
-			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
-		}
-	case 0b111000:
-		c.Opsubu(inst)
-	case 0b101011:
-		c.Opsrl(inst)
-	case 0b101100:
-		c.Opsltiu(inst)
-	case 0b110010:
-		switch inst.Subfunction() {
-		case 0b000000:
-			c.Opdivu(inst)
-		case 0b000001:
-			c.Opmfhi(inst)
-		default:
-			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
-		}
-	case 0b110011:
-		c.Opslt(inst)
 	case 0b000000:
 		switch inst.Subfunction() {
 		case 0b000000:
 			c.Opsll(inst)
+		case 0b000010:
+			c.Opsrl(inst)
+		case 0b000011:
+			c.Opsra(inst)
+		case 0b000100:
+			c.Opsllv(inst)
+		case 0b000110:
+			c.Opsrlv(inst)
+		case 0b000111:
+			c.Opsrav(inst)
+		case 0b001000:
+			c.Opjr(inst)
+		case 0b001001:
+			c.Opjalr(inst)
+		case 0b001100:
+			c.Opsyscall(inst)
+		case 0b001101:
+			c.Opbreak(inst)
+		case 0b010000:
+			c.Opmfhi(inst)
+		case 0b010001:
+			c.Opmthi(inst)
+		case 0b010010:
+			c.Opmflo(inst)
+		case 0b010011:
+			c.Opmtlo(inst)
+		case 0b011000:
+			c.Opmult(inst)
+		case 0b011001:
+			c.Opmultu(inst)
+		case 0b011010:
+			c.Opdiv(inst)
+		case 0b011011:
+			c.Opdivu(inst)
+		case 0b100000:
+			c.Opadd(inst)
+		case 0b100001:
+			c.Opaddu(inst)
+		case 0b100010:
+			c.Opsub(inst)
+		case 0b100011:
+			c.Opsubu(inst)
+		case 0b100100:
+			c.Opand(inst)
+		case 0b100101:
+			c.Opor(inst)
+		case 0b100110:
+			c.Opxor(inst)
+		case 0b100111:
+			c.Opnor(inst)
+		case 0b101010:
+			c.Opslt(inst)
+		case 0b101011:
+			c.Opsltu(inst)
 		default:
-			panic(fmt.Sprintf("Unhandled instruction: %x", inst))
+			c.Opillegal(inst)
 		}
+	case 0b000001:
+		c.Opbxx(inst)
+	case 0b000010:
+		c.Opj(inst)
+	case 0b000011:
+		c.Opjal(inst)
+	case 0b000100:
+		c.Opbeq(inst)
+	case 0b000101:
+		c.Opbne(inst)
+	case 0b000110:
+		c.Opblez(inst)
+	case 0b000111:
+		c.Opbgtz(inst)
+	case 0b001000:
+		c.Opaddi(inst)
+	case 0b001001:
+		c.Opaddiu(inst)
+	case 0b001010:
+		c.Opslti(inst)
+	case 0b001011:
+		c.Opsltiu(inst)
+	case 0b001100:
+		c.Opandi(inst)
+	case 0b001101:
+		c.Opori(inst)
+	case 0b001110:
+		c.Opxori(inst)
+	case 0b001111:
+		c.Oplui(inst)
+	case 0b010000:
+		c.Opcop0(inst)
+	case 0b010001:
+		c.Opcop1(inst)
+	case 0b010010:
+		c.Opcop2(inst)
+	case 0b010011:
+		c.Opcop3(inst)
+	case 0b100000:
+		c.Oplb(inst)
+	case 0b100001:
+		c.Oplh(inst)
+	case 0b100010:
+		c.Oplwl(inst)
+	case 0b100011:
+		c.Oplw(inst)
+	case 0b100100:
+		c.Oplbu(inst)
+	case 0b100101:
+		c.Oplhu(inst)
+	case 0b100110:
+		c.Oplwr(inst)
+	case 0b101000:
+		c.Opsb(inst)
+	case 0b101001:
+		c.Opsh(inst)
+	case 0b101010:
+		c.Opslt(inst)
+	case 0b101011:
+		c.Opsltu(inst)
+	case 0b101110:
+		c.Opswr(inst)
+	case 0b110000:
+		c.Oplwc0(inst)
+	case 0b110001:
+		c.Oplwc1(inst)
+	case 0b110010:
+		c.Oplwc2(inst)
+	case 0b110011:
+		c.Oplwc3(inst)
+	case 0b111000:
+		c.Opswc0(inst)
+	case 0b111001:
+		c.Opswc1(inst)
+	case 0b111010:
+		c.Opswc2(inst)
+	case 0b111011:
+		c.Opswc3(inst)
 	default:
-		panic(fmt.Sprintf("Unhandled instruction: %x", inst))
+		c.Opillegal(inst)
 	}
 }
 
 func (c *CPU) Run_next(inst Instruction) {
-	inst.op = c.next.op              //Grab inst
-	c.next.op = c.Load32(c.pc)       //Grab inst
-	c.pc = Wrapping_add(c.pc, 4, 32) //Increment PC
-	c.Decode_and_execute(inst)
+	inst.op = c.Load32(c.pc) //Grab inst
+	c.current_pc = c.pc
+
+	if c.current_pc % 4 != 0{
+		c.Exception(LoadAddressError)
+		return
+	}
+	
+	c.delay_slot = c.branch
+	c.branch = false
+
+	c.pc = c.next_pc //Increment
+	c.next_pc = Wrapping_add(c.next_pc, 4, 32)
 
 	c.Set_reg(c.load.r, c.load.val)
 	c.load.Load(0, 0)
@@ -713,4 +807,29 @@ func (c *CPU) Run_next(inst Instruction) {
 
 func (c *CPU) Load32(addr uint32) uint32 { //load 32-bit from inter
 	return c.inter.Load32(addr)
+}
+
+func (c *CPU) Exception(cause Exception) { //Trigger Exception
+	var handler uint32
+
+	if (c.sr & (1 << 22)) != 0 { //Handler depending on BEV
+		handler = 0xbfc00180
+	} else {
+		handler = 0x80000080
+	}
+
+	mode := c.sr & 0x3f //Shift bits 2 places to the left
+	c.sr &= ^uint32(0x3f)
+	c.sr |= (mode << 2) & 0x3f
+
+	c.cause = uint32(cause) << 2 //Update cause
+
+	c.epc = c.current_pc
+
+	if c.delay_slot {
+		c.epc = Wrapping_sub(c.epc, 4, 32)
+		c.cause |= 1 << 31
+	}
+	c.pc = handler
+	c.next_pc = Wrapping_add(c.next_pc, 4, 32)
 }
