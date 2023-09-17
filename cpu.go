@@ -42,6 +42,8 @@ const (
 	Overflow           = 0xc
 	LoadAddressError   = 0x4
 	StoreAddressError  = 0x5
+	Break              = 0x9
+	CoprocessorError   = 0xb
 	IllegalInstruction = 0xa
 )
 
@@ -99,6 +101,14 @@ func Wrapping_sub(a uint32, b uint32, mod uint32) uint32 {
 }
 
 func Checkedadd(a, b int32) (int32, error) {
+	result := a + b
+	if (b > 0 && result < a) || (b < 0 && result > a) {
+		return 0, fmt.Errorf("integer overflow")
+	}
+	return result, nil
+}
+
+func Checkedsub(a, b int32) (int32, error) {
 	result := a + b
 	if (b > 0 && result < a) || (b < 0 && result > a) {
 		return 0, fmt.Errorf("integer overflow")
@@ -234,6 +244,7 @@ func (c *CPU) Oprfe(inst Instruction) { //Return from Exception
 	c.sr |= mode >> 2
 
 }
+
 func (c *CPU) Opcop0(inst Instruction) {
 	switch inst.S() {
 	case 0b00000:
@@ -245,6 +256,18 @@ func (c *CPU) Opcop0(inst Instruction) {
 	default:
 		panic(fmt.Sprintf("Unhandled COP inst: %x", inst))
 	}
+}
+
+func (c *CPU) Opcop1(Instruction) {
+	c.Exception(CoprocessorError)
+}
+
+func (c *CPU) Opcop2(inst Instruction) {
+	panic(fmt.Sprintf("Unhandled inst: %x", inst))
+}
+
+func (c *CPU) Opcop3(Instruction) {
+	c.Exception(CoprocessorError)
 }
 
 func (c *CPU) Opbne(inst Instruction) { //branch not equal
@@ -428,7 +451,7 @@ func (c *CPU) Opbgtz(inst Instruction) { //Branch if > 0
 	}
 }
 
-func (c *CPU) Opbletz(inst Instruction) { //Branch if </= 0
+func (c *CPU) Opblez(inst Instruction) { //Branch if </= 0
 	i := inst.Imm_se()
 	s := inst.S()
 
@@ -613,6 +636,285 @@ func (c *CPU) Opmthi(inst Instruction) { //Move to LO
 	c.hi = c.Reg(s)
 }
 
+func (c *CPU) Oplhu(inst Instruction) { //Load halfword unsigned
+	i := inst.Imm_se()
+	t := inst.T()
+	s := inst.S()
+
+	addr := Wrapping_add(c.reg[s], i, 32)
+
+	if addr%2 == 0 {
+		v := c.Load16(addr)
+		c.load.Load(RegIn(t), uint32(v))
+	} else {
+		c.Exception(LoadAddressError)
+	}
+}
+
+func (c *CPU) Opsllv(inst Instruction) { //shift ll var
+	d := inst.D()
+	t := inst.T()
+	s := inst.S()
+
+	v := c.reg[t] << (c.reg[s] & 0x1f)
+
+	c.Setreg(d, v)
+}
+
+func (c *CPU) Oplh(inst Instruction) { //Load halfword
+	i := inst.Imm_se()
+	t := inst.T()
+	s := inst.S()
+
+	addr := Wrapping_add(c.reg[s], i, 32)
+	v := int16(c.Load16(addr))
+	c.load.Load(RegIn(t), uint32(v))
+}
+
+func (c *CPU) Opnor(inst Instruction) { //Not Or
+	d := inst.D()
+	t := inst.T()
+	s := inst.S()
+
+	v := ^(c.reg[s] | c.reg[t])
+
+	c.Setreg(d, v)
+}
+
+func (c *CPU) Opsrav(inst Instruction) { //shift ra var
+	d := inst.D()
+	t := inst.T()
+	s := inst.S()
+
+	v := (int32(c.reg[t])) >> (c.reg[s] & 0x1f)
+
+	c.Setreg(d, uint32(v))
+}
+
+func (c *CPU) Opsrlv(inst Instruction) { //shift rl var
+	d := inst.D()
+	t := inst.T()
+	s := inst.S()
+
+	v := c.reg[t] >> (c.reg[s] & 0x1f)
+
+	c.Setreg(d, v)
+}
+
+func (c *CPU) Opmultu(inst Instruction) { //multiply unsigned
+	t := inst.T()
+	s := inst.S()
+
+	a := uint64(c.reg[s])
+	b := uint64(c.reg[t])
+
+	v := a * b
+
+	c.hi = uint32(v >> 32)
+	c.lo = uint32(v)
+}
+
+func (c *CPU) Opxor(inst Instruction) { //Exclusive Or
+	d := inst.D()
+	t := inst.T()
+	s := inst.S()
+
+	v := c.reg[s] ^ c.reg[t]
+
+	c.Setreg(d, v)
+}
+
+func (c *CPU) Opmult(inst Instruction) { //multiply
+	t := inst.T()
+	s := inst.S()
+
+	a := int64(c.reg[s])
+	b := int64(c.reg[t])
+
+	v := uint64(a * b)
+
+	c.hi = uint32(v >> 32)
+	c.lo = uint32(v)
+}
+
+func (c *CPU) Opsub(inst Instruction) { //Subtract
+	d := inst.D()
+	t := int32(c.reg[inst.T()])
+	s := int32(c.reg[inst.S()])
+
+	res, err := Checkedsub(s, t)
+
+	if err != nil {
+		c.Exception(Overflow)
+	} else {
+		c.Setreg(d, uint32(res))
+	}
+}
+
+func (c *CPU) Opxori(inst Instruction) { //Exclusive Or + Imm
+	i := inst.Imm()
+	t := inst.T()
+	s := inst.S()
+
+	v := c.reg[s] ^ i
+
+	c.Setreg(t, v)
+}
+
+func (c *CPU) Oplwl(inst Instruction) { //Load word left
+	i := inst.Imm_se()
+	t := inst.T()
+	s := inst.S()
+
+	addr := Wrapping_add(c.reg[s], i, 32)
+
+	cur_v := c.out_reg[t] //Bypass LD
+
+	aligned_addr := addr &^ 3
+	aligned_word := c.Load32(aligned_addr)
+
+	v := addr & 3
+
+	switch v {
+	case 0:
+		v = (cur_v & 0x00ffffff) | (aligned_word << 24)
+	case 1:
+		v = (cur_v & 0x0000ffff) | (aligned_word << 16)
+	case 2:
+		v = (cur_v & 0x000000ff) | (aligned_word << 8)
+	case 3:
+		v = (cur_v & 0x00000000) | (aligned_word << 0)
+	default:
+		panic(fmt.Sprintf("Unreachable"))
+	}
+
+	c.load.Load(RegIn(t), v)
+}
+
+func (c *CPU) Oplwr(inst Instruction) { //Load word right
+	i := inst.Imm_se()
+	t := inst.T()
+	s := inst.S()
+
+	addr := Wrapping_add(c.reg[s], i, 32)
+
+	cur_v := c.out_reg[t] //Bypass LD
+
+	aligned_addr := addr &^ 3
+	aligned_word := c.Load32(aligned_addr)
+
+	v := addr & 3
+
+	switch v {
+	case 0:
+		v = (cur_v & 0x00ffffff) | (aligned_word >> 24)
+	case 1:
+		v = (cur_v & 0x0000ffff) | (aligned_word >> 16)
+	case 2:
+		v = (cur_v & 0x000000ff) | (aligned_word >> 8)
+	case 3:
+		v = (cur_v & 0x00000000) | (aligned_word >> 0)
+	default:
+		panic(fmt.Sprintf("Unreachable"))
+	}
+
+	c.load.Load(RegIn(t), v)
+}
+
+func (c *CPU) Opswl(inst Instruction) { //Shift word left
+	i := inst.Imm_se()
+	t := inst.T()
+	s := inst.S()
+
+	addr := Wrapping_add(c.reg[s], i, 32)
+	v := c.reg[t]
+
+	aligned_addr := addr &^ 3
+	cur_mem := c.Load32(aligned_addr)
+
+	mem := addr & 3
+
+	switch v {
+	case 0:
+		mem = (cur_mem & 0x00ffffff) | (v >> 24)
+	case 1:
+		mem = (cur_mem & 0x0000ffff) | (v >> 16)
+	case 2:
+		mem = (cur_mem & 0x000000ff) | (v >> 8)
+	case 3:
+		mem = (cur_mem & 0x00000000) | (v >> 0)
+	default:
+		panic(fmt.Sprintf("Unreachable"))
+	}
+
+	c.Store32(addr, mem)
+}
+
+func (c *CPU) Opswr(inst Instruction) { //Shift word right
+	i := inst.Imm_se()
+	t := inst.T()
+	s := inst.S()
+
+	addr := Wrapping_add(c.reg[s], i, 32)
+	v := c.reg[t]
+
+	aligned_addr := addr &^ 3
+	cur_mem := c.Load32(aligned_addr)
+
+	mem := addr & 3
+
+	switch v {
+	case 0:
+		mem = (cur_mem & 0x00ffffff) | (v << 24)
+	case 1:
+		mem = (cur_mem & 0x0000ffff) | (v << 16)
+	case 2:
+		mem = (cur_mem & 0x000000ff) | (v << 8)
+	case 3:
+		mem = (cur_mem & 0x00000000) | (v << 0)
+	default:
+		panic(fmt.Sprintf("Unreachable"))
+	}
+
+	c.Store32(addr, mem)
+}
+
+func (c *CPU) Oplwc0(Instruction) {
+	c.Exception(CoprocessorError)
+}
+
+func (c *CPU) Oplwc1(Instruction) {
+	c.Exception(CoprocessorError)
+}
+
+func (c *CPU) Oplwc2(inst Instruction) {
+	panic(fmt.Sprintf("Unhandled inst: %x", inst))
+}
+
+func (c *CPU) Oplwc3(Instruction) {
+	c.Exception(CoprocessorError)
+}
+
+func (c *CPU) Opswc0(Instruction) {
+	c.Exception(CoprocessorError)
+}
+
+func (c *CPU) Opswc1(Instruction) {
+	c.Exception(CoprocessorError)
+}
+
+func (c *CPU) Opswc2(inst Instruction) {
+	panic(fmt.Sprintf("Unhandled inst: %x", inst))
+}
+
+func (c *CPU) Opswc3(Instruction) {
+	c.Exception(CoprocessorError)
+}
+
+func (c *CPU) Opbreak(Instruction) {
+	c.Exception(Break)
+}
+
 func (c *CPU) Opsyscall(Instruction) { //Syscall
 	c.Exception(SysCall)
 }
@@ -632,6 +934,10 @@ func (c *CPU) Store16(addr uint32, val uint16) {
 
 func (c *CPU) Store8(addr uint32, val uint8) {
 	c.inter.Store8(addr, val)
+}
+
+func (c *CPU) Load16(addr uint32) uint16 {
+	return c.inter.Load16(addr)
 }
 
 func (c *CPU) Load8(addr uint32) uint8 {
@@ -788,11 +1094,11 @@ func (c *CPU) Run_next(inst Instruction) {
 	inst.op = c.Load32(c.pc) //Grab inst
 	c.current_pc = c.pc
 
-	if c.current_pc % 4 != 0{
+	if c.current_pc%4 != 0 {
 		c.Exception(LoadAddressError)
 		return
 	}
-	
+
 	c.delay_slot = c.branch
 	c.branch = false
 

@@ -65,7 +65,7 @@ var IRQ_CONTROL = Range{
 	bit:     8,
 }
 
-var TIMERS = Range{
+var TIMERS = Range{ //Change?
 	address: 0x1f801104,
 	bit:     8,
 }
@@ -73,6 +73,11 @@ var TIMERS = Range{
 var DMA = Range{
 	address: 0x1f8010f0,
 	bit:     0x80,
+}
+
+var GPU = Range{ //Change?
+	address: 0x1f801814,
+	bit:     32,
 }
 
 func (r Range) Contains(addr uint32) *uint32 { //Return offset if it exists
@@ -106,9 +111,34 @@ func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
 		return 0
 	} else if offset := DMA.Contains(abaddr); offset != nil {
 		panic(fmt.Sprintf("Unhandled Load32 at address: 0x%08x", addr))
-	} else {
+	} else if offset := GPU.Contains(abaddr); offset != nil{
+		fmt.Println("GPU READ")
+		switch *offset{
+		case 4:
+			return 0x10000000
+		default:
+			return 0
+		}
+	}
+
+	panic(fmt.Sprintf("Unhandled Load32 at address: 0x%08x", addr))
+}
+
+func (i *Interconnect) Load16(addr uint32) uint16 { //load 32-bit at addr
+	abaddr := Mask_region(addr)
+
+	if offset := SPU.Contains(abaddr); offset != nil {
+		fmt.Printf("Unhandled Write to Register: 0x%08x", abaddr)
+		return 0
+	} 
+	if offset := RAM.Contains(abaddr); offset != nil{
+		return i.ram.Load16(*offset)
+	}
+	if offset := IRQ_CONTROL.Contains(addr); offset != nil {
+		fmt.Println("IRQ Control")
 		return 0
 	}
+	panic(fmt.Sprintf("Unhandled Load16 at Address: 0x%08x", addr))
 }
 
 func (i *Interconnect) Load8(addr uint32) uint8 {
@@ -130,6 +160,8 @@ func (i *Interconnect) Load8(addr uint32) uint8 {
 }
 
 func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in address
+	abaddr := Mask_region(addr)
+
 	if addr%4 != 0 {
 		panic(fmt.Sprintf("Unhandled Store32 address: 0x%08x", addr))
 	} else if offset := BIOS.Contains(addr); offset != nil {
@@ -149,9 +181,15 @@ func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in addre
 	} else if offset := IRQ_CONTROL.Contains(addr); offset != nil {
 		fmt.Println("IRQ Control")
 		return
+	} else if offset := DMA.Contains(abaddr); offset != nil{
+		fmt.Printf("DMA write: 0x%08x 0x%08x", abaddr, val)
+		return
+	} else if offset := GPU.Contains(abaddr); offset != nil{
+		fmt.Printf("GPU Write...")
+		return
 	}
 
-	panic(fmt.Sprintf("Unhandled store32 into address: 0x%08x", addr))
+	panic(fmt.Sprintf("Unhandled store32 into address: 0x%08x 0x%08x", addr, val))
 }
 
 func (i *Interconnect) Store16(addr uint32, val uint16) {
@@ -163,10 +201,16 @@ func (i *Interconnect) Store16(addr uint32, val uint16) {
 
 	if offset := SPU.Contains(abaddr); offset != nil {
 		panic(fmt.Sprintf("Unhandled Write to Register: 0x%08x", val))
-	} else if offset := TIMERS.Contains(abaddr); offset != nil {
-		panic(fmt.Sprintf("Unhandled Write to Timer Reg: 0x%08x", offset))
-	} else if offset := RAM.Contains(abaddr); offset != nil {
+	} 
+	if offset := TIMERS.Contains(abaddr); offset != nil {
+		panic(fmt.Sprintf("Unhandled Write to Timer Reg: 0x%x: 0x%08x", offset, val))
+	} 
+	if offset := RAM.Contains(abaddr); offset != nil {
 		i.ram.Store16(*offset, val)
+		return
+	} 
+	if offset := IRQ_CONTROL.Contains(addr); offset != nil {
+		fmt.Println("IRQ Control")
 		return
 	}
 

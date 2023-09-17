@@ -18,6 +18,13 @@ func (r *RAM) Load32(offset uint32) uint32 { //Fetch word at offset
 	return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
 }
 
+func (r *RAM) Load16(offset uint32) uint16 { //Fetch word at offset
+	b0 := uint16(r.data[offset])
+	b1 := uint16(r.data[offset+1])
+
+	return b0 | (b1 << 8)
+}
+
 func (r *RAM) Load8(offset uint32) uint8 { //Fetch word at offset
 	return r.data[offset]
 }
