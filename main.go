@@ -13,7 +13,7 @@ func main() {
 		fmt.Println("oops")
 	}
 
-	inter := biosmap.Interconnect{}.New(bios)
+	inter := biosmap.Interconnect{}.New(bios *bios.BIOS)
 
 	cpu := &CPU{}
 	cpu.New(inter)

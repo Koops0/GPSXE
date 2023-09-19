@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-
 	"./biosmap"
 )
 
@@ -920,7 +919,7 @@ func (c *CPU) Opsyscall(Instruction) { //Syscall
 }
 
 func (c *CPU) Opillegal(inst Instruction) { //Syscall
-	fmt.Sprintf("Illegal instruction: %x", inst)
+	fmt.Printf("Illegal instruction: %x", inst)
 	c.Exception(IllegalInstruction)
 }
 
