@@ -2,7 +2,7 @@ package biosmap
 
 import (
 	"fmt"
-
+	"../dma"
 	"../bios"
 	"../ram"
 )
@@ -92,11 +92,32 @@ func (r Range) Contains(addr uint32) *uint32 { //Return offset if it exists
 type Interconnect struct {
 	bios bios.BIOS
 	ram  ram.RAM
+	dma  dma.DMA
 }
 
 func (i Interconnect) New(bios *bios.BIOS) Interconnect {
 	i.bios = *bios
+	i.dma.New()
 	return i
+}
+
+func(i* Interconnect) Dma_reg(offset uint32) uint32{ //DMA reg read
+	switch(offset){
+	case 0x70:
+		return i.dma.Control()
+	default:
+		panic("error!!!!")
+	}
+}
+
+
+func(i* Interconnect) Set_dma_reg(offset uint32, val uint32){ //DMA reg write
+	switch(offset){
+	case 0x70:
+		i.dma.Set_control(val)
+	default:
+		panic("error!!!!")
+	}
 }
 
 func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
@@ -110,7 +131,7 @@ func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
 		fmt.Println("IRQ Control")
 		return 0
 	} else if offset := DMA.Contains(abaddr); offset != nil {
-		panic(fmt.Sprintf("Unhandled Load32 at address: 0x%08x", addr))
+		return i.Dma_reg(*offset)
 	} else if offset := GPU.Contains(abaddr); offset != nil{
 		fmt.Println("GPU READ")
 		switch *offset{
@@ -182,7 +203,7 @@ func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in addre
 		fmt.Println("IRQ Control")
 		return
 	} else if offset := DMA.Contains(abaddr); offset != nil{
-		fmt.Printf("DMA write: 0x%08x 0x%08x", abaddr, val)
+		i.Set_dma_reg(*offset, val)
 		return
 	} else if offset := GPU.Contains(abaddr); offset != nil{
 		fmt.Printf("GPU Write...")
