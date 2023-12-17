@@ -2,7 +2,7 @@ package biosmap
 
 import (
 	"fmt"
-
+	"../dma"
 	"../bios"
 	"../ram"
 )
@@ -92,11 +92,71 @@ func (r Range) Contains(addr uint32) *uint32 { //Return offset if it exists
 type Interconnect struct {
 	bios bios.BIOS
 	ram  ram.RAM
+	dma  dma.DMA
 }
 
 func (i Interconnect) New(bios *bios.BIOS) Interconnect {
 	i.bios = *bios
+	i.dma.New()
 	return i
+}
+
+func(i* Interconnect) Dma_reg(offset uint32) uint32{ //DMA reg read
+	major := (offset & 0x70) >> 4
+	minor := offset & 0xf
+
+	switch major{
+	case 0,1,2,3,4,5,6:
+		channel_index := i.dma.From_index(major)
+		switch minor{
+		case 8:
+			return i.dma.Channels[channel_index].Control()
+		default:
+			panic("Unhandled DMA read")
+		}
+	case 7:
+		switch minor{
+		case 0:
+			return i.dma.Control()
+		case 4:
+			return i.dma.Interrupt()
+		default:
+			panic("Unhandled DMA read")
+		}
+
+	default:
+		panic("Unhandled DMA read")
+	}
+}
+
+
+func(i* Interconnect) Set_dma_reg(offset uint32, val uint32){ //DMA reg write
+	major := (offset & 0x70) >> 4
+	minor := offset & 0xf
+
+	switch major{
+	case 0,1,2,3,4,5,6:
+		port := i.dma.From_index(major)
+		channel_index := i.dma.Channel(port)
+		switch minor{
+		case 8:
+			channel_index.Set_control(val)
+		default:
+			panic("Unhandled DMA Write")
+		}
+	case 7:
+		switch minor{
+		case 0:
+			i.dma.Control()
+		case 4:
+			i.dma.Interrupt()
+		default:
+			panic("Unhandled DMA Write")
+		}
+
+	default:
+		panic("Unhandled DMA Write")
+	}
 }
 
 func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
@@ -110,7 +170,7 @@ func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
 		fmt.Println("IRQ Control")
 		return 0
 	} else if offset := DMA.Contains(abaddr); offset != nil {
-		panic(fmt.Sprintf("Unhandled Load32 at address: 0x%08x", addr))
+		return i.Dma_reg(*offset)
 	} else if offset := GPU.Contains(abaddr); offset != nil{
 		fmt.Println("GPU READ")
 		switch *offset{
@@ -182,7 +242,7 @@ func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in addre
 		fmt.Println("IRQ Control")
 		return
 	} else if offset := DMA.Contains(abaddr); offset != nil{
-		fmt.Printf("DMA write: 0x%08x 0x%08x", abaddr, val)
+		i.Set_dma_reg(*offset, val)
 		return
 	} else if offset := GPU.Contains(abaddr); offset != nil{
 		fmt.Printf("GPU Write...")
