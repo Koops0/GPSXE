@@ -10,6 +10,8 @@ type Channel struct {
 	chop_dma_sz uint8
 	chop_cpu_sz uint8
 	dummy       uint8
+	base        uint32
+
 }
 
 func (c *Channel) New() {
@@ -22,6 +24,7 @@ func (c *Channel) New() {
 	c.chop_dma_sz = 0
 	c.chop_cpu_sz = 0
 	c.dummy = 0
+	c.base = 0;
 }
 
 func (c *Channel) Control() uint32 { //Get interrupt val
@@ -93,6 +96,14 @@ func (c *Channel) Set_control(val uint32) { //Set control
 	c.enable = (val>>24)&1 != 0
 	c.trigger = (val>>28)&1 != 0
 	c.dummy = uint8((val >> 29) & 3)
+}
+
+func (c *Channel) Base() uint32 { //Get base
+	return c.base
+}
+
+func (c *Channel) Set_base(val uint32) { //Set base
+	c.base = val & 0x1fffff
 }
 
 type Direction int

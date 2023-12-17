@@ -102,21 +102,60 @@ func (i Interconnect) New(bios *bios.BIOS) Interconnect {
 }
 
 func(i* Interconnect) Dma_reg(offset uint32) uint32{ //DMA reg read
-	switch(offset){
-	case 0x70:
-		return i.dma.Control()
+	major := (offset & 0x70) >> 4
+	minor := offset & 0xf
+
+	switch major{
+	case 0,1,2,3,4,5,6:
+		channel_index := i.dma.From_index(major)
+		switch minor{
+		case 8:
+			return i.dma.Channels[channel_index].Control()
+		default:
+			panic("Unhandled DMA read")
+		}
+	case 7:
+		switch minor{
+		case 0:
+			return i.dma.Control()
+		case 4:
+			return i.dma.Interrupt()
+		default:
+			panic("Unhandled DMA read")
+		}
+
 	default:
-		panic("error!!!!")
+		panic("Unhandled DMA read")
 	}
 }
 
 
 func(i* Interconnect) Set_dma_reg(offset uint32, val uint32){ //DMA reg write
-	switch(offset){
-	case 0x70:
-		i.dma.Set_control(val)
+	major := (offset & 0x70) >> 4
+	minor := offset & 0xf
+
+	switch major{
+	case 0,1,2,3,4,5,6:
+		port := i.dma.From_index(major)
+		channel_index := i.dma.Channel(port)
+		switch minor{
+		case 8:
+			channel_index.Set_control(val)
+		default:
+			panic("Unhandled DMA Write")
+		}
+	case 7:
+		switch minor{
+		case 0:
+			i.dma.Control()
+		case 4:
+			i.dma.Interrupt()
+		default:
+			panic("Unhandled DMA Write")
+		}
+
 	default:
-		panic("error!!!!")
+		panic("Unhandled DMA Write")
 	}
 }
 
