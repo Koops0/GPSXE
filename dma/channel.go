@@ -11,7 +11,8 @@ type Channel struct {
 	chop_cpu_sz uint8
 	dummy       uint8
 	base        uint32
-
+	block_size  uint16
+	block_count uint16
 }
 
 func (c *Channel) New() {
@@ -24,7 +25,9 @@ func (c *Channel) New() {
 	c.chop_dma_sz = 0
 	c.chop_cpu_sz = 0
 	c.dummy = 0
-	c.base = 0;
+	c.base = 0
+	c.block_size = 0
+	c.block_count = 0
 }
 
 func (c *Channel) Control() uint32 { //Get interrupt val
@@ -104,6 +107,69 @@ func (c *Channel) Base() uint32 { //Get base
 
 func (c *Channel) Set_base(val uint32) { //Set base
 	c.base = val & 0x1fffff
+}
+
+func (c *Channel) Block_control() uint32 { //Retrieve block control
+	bs := uint32(c.block_size)
+	bc := uint32(c.block_count)
+	return (bc << 16) | bs
+}
+
+func (c *Channel) Set_block_control(val uint32) { //Set block control
+	c.block_size = uint16(val)
+	c.block_count = uint16(val >> 16)
+}
+
+func (c *Channel) Active() bool { //Check if channel is active
+	var trigger bool
+
+	switch c.sync {
+	case Manual:
+		trigger = c.trigger
+	default:
+		trigger = true
+	}
+
+	return c.enable && trigger
+}
+
+func (c *Channel) Direction() Direction { //Get direction
+	return c.dir
+}	
+
+func (c *Channel) Step() Step { //Get step
+	return c.step
+}
+
+func (c *Channel) Sync() Sync { //Get sync
+	return c.sync
+}
+
+func (c *Channel) TransferSize() uint32 { //Get transfer size
+	bs := uint32(c.block_size)
+	bc := uint32(c.block_count)
+	var transferSize *uint32
+	switch c.sync {
+	case Manual:
+	    // For manual mode only the block size is used
+	    transferSize = new(uint32)
+	    *transferSize = bs
+	case Request:
+	    // In DMA request mode we must transfer ‘bc‘ blocks
+	    size := bc * bs
+	    transferSize = &size
+	case LinkedList:
+	    // In linked list mode the size is not known ahead of time:
+	    // we stop when we encounter the "end of list" marker (0xffffffff)
+	    transferSize = nil
+	}
+
+	return *transferSize
+}
+
+func (c *Channel) Done() { //completed
+	c.enable = false
+	c.trigger = false
 }
 
 type Direction int
