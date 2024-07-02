@@ -179,10 +179,44 @@ func (i *Interconnect) Set_dma_reg(offset uint32, val uint32) { //DMA reg write
 func (i *Interconnect) DoDMA(port dma.Port) { //DMA
 	switch i.dma.Channel(port).Sync() {
 	case dma.LinkedList:
-		panic("Linked list mode unsupported")
+		i.DoDMALinkedList(port)
 	default:
 		i.DoDMABlock(port)
 	}
+}
+
+func (i *Interconnect) DoDMALinkedList(port dma.Port) {
+	channel := i.dma.Channel(port)
+	addr := channel.Base() & 0x1ffffc
+
+	if channel.Direction() == dma.ToRam {
+		panic("Unhandled DMA direction")
+	}
+
+	if port != dma.Gpu {
+		panic("Unhandled DMA port")
+	}
+
+	for {
+		//Linked lists need headers
+		header := i.ram.Load32(addr)
+		remsz := header >> 24
+
+		for remsz > 0 {
+			addr = (addr + 4) & 0x1ffffc
+			src_word := i.ram.Load32(addr)
+			fmt.Printf("GPU command: %08x\n", src_word)
+			remsz--
+		}
+
+		if header & 0x800000 != 0 {
+			break
+		}
+
+		addr = header & 0x1ffffc
+	}
+
+	channel.Done()
 }
 
 func (i *Interconnect) DoDMABlock(port dma.Port) {
@@ -213,10 +247,10 @@ func (i *Interconnect) DoDMABlock(port dma.Port) {
 
 	for remsz > 0 {
 		cur_addr := addr & 0x1ffffc
+		var src_word uint32
 	
 		switch channel.Direction() {
 		case dma.ToRam:
-			var src_word uint32
 			switch port {
 			case dma.Otc:
 				switch remsz {
@@ -229,7 +263,13 @@ func (i *Interconnect) DoDMABlock(port dma.Port) {
 				i.Store32(cur_addr, src_word)
 			}
 		case dma.FromRam:
-			panic("Unhandled DMA direction")
+			src_word = i.ram.Load32(cur_addr)
+			switch port{
+			case dma.Gpu:
+				fmt.Printf("GPU command: %08x\n", src_word)
+			default:
+				panic("Unhandled DMA port")
+			}
 		}
 	
 		addr = Wrapping_add(addr, uint32(increment), 32)
