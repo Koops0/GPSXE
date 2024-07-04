@@ -46,7 +46,7 @@ const (
 	IllegalInstruction = 0xa
 )
 
-func (c *CPU) New(inter biosmap.Interconnect) {
+func (c *CPU) New(inter biosmap.Interconnect) CPU{
 	c.reg[0] = 0
 	c.pc = 0xbfc00000 //reset val
 	c.next_pc = Wrapping_add(c.pc, 4, 32)
@@ -59,6 +59,7 @@ func (c *CPU) New(inter biosmap.Interconnect) {
 	c.lo = 0xdeadbeef
 	c.branch = false
 	c.delay_slot = false
+	return *c
 }
 
 func (c CPU) Reg(index uint32) uint32 {

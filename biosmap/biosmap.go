@@ -6,6 +6,7 @@ import (
 	"../bios"
 	"../dma"
 	"../ram"
+	"../gpu"
 )
 
 type Range struct {
@@ -94,6 +95,7 @@ type Interconnect struct {
 	bios bios.BIOS
 	ram  ram.RAM
 	dma  dma.DMA
+	gpu  gpu.GPU
 }
 
 func (i Interconnect) New(bios *bios.BIOS) Interconnect {
@@ -205,7 +207,7 @@ func (i *Interconnect) DoDMALinkedList(port dma.Port) {
 		for remsz > 0 {
 			addr = (addr + 4) & 0x1ffffc
 			src_word := i.ram.Load32(addr)
-			fmt.Printf("GPU command: %08x\n", src_word)
+			i.gpu.Gp0(src_word)
 			remsz--
 		}
 
@@ -364,7 +366,13 @@ func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in addre
 		i.Set_dma_reg(*offset, val)
 		return
 	} else if offset := GPU.Contains(abaddr); offset != nil {
-		fmt.Printf("GPU Write...")
+		switch *offset {
+		case 0:
+			fmt.Println("GPU Write")
+			i.gpu.Gp0(val)
+		default:
+			fmt.Println("Unhandled GPU Write")
+		}
 		return
 	}
 

@@ -15,7 +15,7 @@ type Channel struct {
 	block_count uint16
 }
 
-func (c *Channel) New() {
+func (c *Channel) New() Channel{
 	c.enable = false
 	c.dir = ToRam
 	c.step = Increment
@@ -28,6 +28,7 @@ func (c *Channel) New() {
 	c.base = 0
 	c.block_size = 0
 	c.block_count = 0
+	return *c
 }
 
 func (c *Channel) Control() uint32 { //Get interrupt val
