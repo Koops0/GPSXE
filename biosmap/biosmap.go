@@ -268,7 +268,7 @@ func (i *Interconnect) DoDMABlock(port dma.Port) {
 			src_word = i.ram.Load32(cur_addr)
 			switch port{
 			case dma.Gpu:
-				fmt.Printf("GPU command: %08x\n", src_word)
+				i.gpu.Gp0(src_word)
 			default:
 				panic("Unhandled DMA port")
 			}

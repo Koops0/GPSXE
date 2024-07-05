@@ -43,8 +43,9 @@ type GPU struct {
     DisplayLineStart        uint16
     DisplayLineEnd          uint16
 	Gp0Command 				CommandBuffer
-	Gp0CommandRemaining 	uint32
+	Gp0WordsRemaining 	    uint32
 	Gp0CommandMethod 		func(*GPU)
+    Gp0Mode                 Gp0Mode
 }
 
 type TextureDepth uint8
@@ -107,6 +108,13 @@ const (
     VRAMCPU
 )
 
+type Gp0Mode uint8
+
+const (
+    Command Gp0Mode = iota
+    ImageLoad
+)
+
 // NewGPUInstance initializes a new GPU instance with default values.
 func (g *GPU) NewGPUInstance() GPU {
     g.PageBaseX = 0
@@ -146,7 +154,7 @@ func (g *GPU) NewGPUInstance() GPU {
 	g.DisplayLineStart = 0
 	g.DisplayLineEnd = 0
 	g.Gp0Command = CommandBuffer{}.New()
-	g.Gp0CommandRemaining = 0
+	g.Gp0WordsRemaining = 0
 	g.Gp0CommandMethod = nil
     return *g
 }
@@ -172,7 +180,7 @@ func (g *GPU) Status() uint32 {
     // Bit 14: not supported
     r |= boolToUint32(g.TextureDisable) << 15
     r |= g.HRes.IntoStatus()
-    r |= uint32(g.VRes) << 19
+    //r |= uint32(g.VRes) << 19
     r |= uint32(g.VMode) << 20
     r |= uint32(g.DisplayDepth) << 21
     r |= boolToUint32(g.Interlaced) << 22
@@ -207,43 +215,10 @@ func (g *GPU) Status() uint32 {
     return r
 }
 
-func Gp0NopWrapper(g *GPU, val uint32) {
-    g.Gp0Nop()
-}
-func Gp0QuadMonoOpaqueWrapper(g *GPU, val uint32) {
-    // Assuming Gp0QuadMonoOpaque is a method that requires the val parameter
-    g.Gp0QuadMonoOpaque()
-}
-
-func Gp0DrawModeWrapper(g *GPU, val uint32) {
-    g.Gp0DrawMode(val)
-}
-
-func Gp0TexWindowWrapper(g *GPU, val uint32) {
-    g.Gp0TexWindow(val)
-}
-
-func Gp0DrawAreaTLWrapper(g *GPU, val uint32) {
-    g.Gp0DrawAreaTL(val)
-}
-
-func Gp0DrawAreaBRWrapper(g *GPU, val uint32) {
-    g.Gp0DrawAreaBR(val)
-}
-
-func Gp0DrawOffsetWrapper(g *GPU, val uint32) {
-    g.Gp0DrawOffset(val)
-}
-
-func Gp0MaskBitSettingWrapper(g *GPU, val uint32) {
-    g.Gp0MaskBitSetting(val)
-}
-
-
 type Gp0Method func(*GPU, uint32)
 
 func (g *GPU) Gp0(val uint32) {
-    if g.Gp0CommandRemaining == 0 {
+    if g.Gp0WordsRemaining == 0 {
         opcode := (val >> 24) & 0xFF
 
         var method Gp0Method
@@ -254,6 +229,14 @@ func (g *GPU) Gp0(val uint32) {
             len, method = 1, Gp0NopWrapper
         case 0x28:
             len, method = 5, Gp0QuadMonoOpaqueWrapper
+        case 0x2C:
+            len, method = 4, Gp0QTBlendOpaqueWrapper
+        case 0x30:
+            len, method = 6, Gp0TriShadedOpaqueWrapper
+        case 0x38:
+            len, method = 8, Gp0QuadShadedOpaqueWrapper
+        case 0xA0:
+            len, method = 3, Gp0ImgLoadWrapper
         case 0xE1:
             len, method = 1, Gp0DrawModeWrapper
         case 0xE2:
@@ -270,32 +253,67 @@ func (g *GPU) Gp0(val uint32) {
             panic(fmt.Sprintf("Unhandled GP0 command: 0x%X", opcode))
         }
 
-        g.Gp0CommandRemaining = len
+        g.Gp0WordsRemaining = len
 		g.Gp0CommandMethod = func(g *GPU) {
     		method(g, val)
 		}
 
         g.Gp0Command.Clear()
-        g.Gp0Command.Push(val)
-    } else {
-        g.Gp0Command.Push(val)
     }
 
-    g.Gp0CommandRemaining--
+    g.Gp0WordsRemaining--
 
-    if g.Gp0CommandRemaining == 0 {
-        g.Gp0CommandMethod(g)
+    switch g.Gp0Mode {
+    case Command:
+        g.Gp0Command.Push(val)
+        if g.Gp0WordsRemaining == 0 {
+            g.Gp0CommandMethod(g)
+        }
+    case ImageLoad:
+        ///Copy Pixel Data
+        if g.Gp0WordsRemaining == 0 {
+            g.Gp0Mode = Command
+        }
     }
 }
 
-func (g *GPU) Gp0Nop() {
+func (g *GPU) Gp0Nop() { //0x00
 }
 
-func (g *GPU) Gp0QuadMonoOpaque() {
-	fmt.Print("Quad Mono Opaque\n")
+func (g *GPU) Gp0QuadMonoOpaque() { //0x28
+	fmt.Println("Draw Quad")
 }
 
-func (g *GPU) Gp0DrawMode(val uint32) {
+func (g *GPU) Gp0QTBlendOpaque() { //0x2C
+    fmt.Println("Draw Quad")
+}
+
+func (g *GPU) Gp0TriShadedOpaque() { //0x30
+    fmt.Println("Draw Triangle")
+}
+
+func (g *GPU) Gp0QuadShadedOpaque() { //0x38
+    fmt.Println("Draw Quad")
+}
+
+func (g *GPU) Gp0ImgLoad(val uint32) { //0xA0
+    res := g.Gp0Command.Index(2)
+    w := (res & 0xFFFF)
+    h := res >> 16
+    imgsize := w * h
+    imgsize = (imgsize + 1) & ^uint32(1)
+    g.Gp0WordsRemaining = imgsize/2
+    g.Gp0Mode = ImageLoad
+}
+
+func (g *GPU) Gp0ImgStore(val uint32) { //0xC0
+    res := g.Gp0Command.Index(2)
+    w := (res & 0xFFFF)
+    h := res >> 16
+    fmt.Println(w, h)
+}
+
+func (g *GPU) Gp0DrawMode(val uint32) { //0xE1
     g.PageBaseX = uint8(val & 0xF)
     g.PageBaseY = uint8((val >> 4) & 1)
     g.SemiTransparency = uint8((val >> 5) & 3)
@@ -347,6 +365,10 @@ func (g *GPU) Gp0DrawOffset(val uint32){ //0xE5
 func (g *GPU) Gp0MaskBitSetting(val uint32){ //0xE6
 	g.ForceSetMaskBit = (val & 1) != 0
 	g.PreserveMaskedPixels = (val & 2) != 0
+}
+
+func (g *GPU) Gp0ClearCache() {
+    
 }
 
 func (g *GPU) Gp1 (val uint32) {
@@ -404,10 +426,6 @@ func (g *GPU) Gp1Reset() {
 	//clear fifo and gpu
 }
 
-func (g *GPU) Read() uint32{
-	return 0
-}
-
 func (g *GPU) Gp1DisplayMode(val uint32){ //0x80
 	hr1 := uint8(val & 3)
 	hr2 := uint8((val >> 6) & 1)
@@ -442,6 +460,20 @@ func (g *GPU) Gp1DisplayMode(val uint32){ //0x80
 	}
 }
 
+func (g *GPU) Gp1ResetCommBuffer(val uint32){ //0x01
+    g.Gp0Command.Clear()
+    g.Gp0WordsRemaining = 0
+    g.Gp0Mode = Command
+}
+
+func (g *GPU) Gp1AcknowledgeIRQ(){ //0x02
+    g.Interrupt = false
+}
+
+func (g *GPU) Gp1DisplayEnable(val uint32){ //0x03
+    g.DisplayDisabled = (val & 1) != 0
+}
+
 func (g *GPU) Gp1DMADir(val uint32){ //0x04
 	switch val & 3 {
 	case 0:
@@ -470,4 +502,56 @@ func (g *GPU) Gp1DisplayHRange(val uint32){ //0x06
 func (g *GPU) Gp1DisplayVRange(val uint32){ //0x07
 	g.DisplayLineStart = uint16(val & 0x3FF)
 	g.DisplayLineEnd = uint16((val >> 10) & 0x3FF)
+}
+
+func (g *GPU) Read() uint32{
+	return 0
+}
+
+func Gp0NopWrapper(g *GPU, val uint32) {
+    g.Gp0Nop()
+}
+func Gp0QuadMonoOpaqueWrapper(g *GPU, val uint32) {
+    // Assuming Gp0QuadMonoOpaque is a method that requires the val parameter
+    g.Gp0QuadMonoOpaque()
+}
+
+func Gp0QTBlendOpaqueWrapper(g *GPU, val uint32) {
+    g.Gp0QTBlendOpaque()
+}
+
+func Gp0TriShadedOpaqueWrapper(g *GPU, val uint32) {
+    g.Gp0TriShadedOpaque()
+}
+
+func Gp0QuadShadedOpaqueWrapper(g *GPU, val uint32) {
+    g.Gp0QuadShadedOpaque()
+}
+
+func Gp0ImgLoadWrapper(g *GPU, val uint32) {
+    g.Gp0ImgLoad(val)
+}
+
+func Gp0DrawModeWrapper(g *GPU, val uint32) {
+    g.Gp0DrawMode(val)
+}
+
+func Gp0TexWindowWrapper(g *GPU, val uint32) {
+    g.Gp0TexWindow(val)
+}
+
+func Gp0DrawAreaTLWrapper(g *GPU, val uint32) {
+    g.Gp0DrawAreaTL(val)
+}
+
+func Gp0DrawAreaBRWrapper(g *GPU, val uint32) {
+    g.Gp0DrawAreaBR(val)
+}
+
+func Gp0DrawOffsetWrapper(g *GPU, val uint32) {
+    g.Gp0DrawOffset(val)
+}
+
+func Gp0MaskBitSettingWrapper(g *GPU, val uint32) {
+    g.Gp0MaskBitSetting(val)
 }
