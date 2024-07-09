@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"./biosmap"
+	"github.com/Koops0/GPSXE/biosmap"
 )
 
 type RegIn uint32

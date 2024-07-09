@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"./bios"
-	"./biosmap"
+	"github.com/Koops0/GPSXE/bios"
+	"github.com/Koops0/GPSXE/biosmap"
 )
 
 func main() {

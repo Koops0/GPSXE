@@ -3,10 +3,10 @@ package biosmap
 import (
 	"fmt"
 
-	"../bios"
-	"../dma"
-	"../ram"
-	"../gpu"
+	"github.com/Koops0/GPSXE/bios"
+	"github.com/Koops0/GPSXE/dma"
+	"github.com/Koops0/GPSXE/ram"
+	"github.com/Koops0/GPSXE/gpu"
 )
 
 type Range struct {
