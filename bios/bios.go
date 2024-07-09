@@ -10,7 +10,7 @@ type BIOS struct {
 	data []uint8 //Memory
 }
 
-func New(path string) (*BIOS, error) { //Load in PSX BIOS
+func New(path string) (*BIOS, error){ //Load in PSX BIOS
 	b := &BIOS{}
 	file, err := os.Open(path)
 

@@ -11,9 +11,19 @@ type DMA struct {
 	Channels    [7]Channel
 }
 
-func (d *DMA) New() {
+func (d *DMA) New() DMA{
 	d.control = 0x07654321
 	d.port = MdecIn
+	d.irq_en = false
+	d.chan_irq_en = 0
+	d.chan_flags = 0
+	d.force_irq = false
+	d.dummy_irq = 0
+	d.Channels = [7]Channel{}
+	for i := 0; i < 7; i++ {
+		d.Channels[i].New()
+	}
+	return *d
 }
 
 func (d *DMA) Irq() bool { //Return interrupt
