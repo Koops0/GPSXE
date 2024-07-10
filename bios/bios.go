@@ -1,7 +1,10 @@
 package bios
 
 import (
-	"os"
+	"errors"
+    "io"
+    "os"
+	"log"
 )
 
 const BIOS_SIZE uint64 = 512 * 1024
@@ -10,28 +13,29 @@ type BIOS struct {
 	data []uint8 //Memory
 }
 
-func New(path string) (*BIOS, error){ //Load in PSX BIOS
-	b := &BIOS{}
-	file, err := os.Open(path)
+func New(path string) (*BIOS, error) { // Load in PSX BIOS
+    b := &BIOS{} 
 
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+    file, err := os.Open(path)
+    if err != nil {
+		log.Fatalf("failed to open file!")
+        return nil, err
+    }
+    defer file.Close()
 
-	b.data = make([]uint8, 0)
+    // Read the file's contents into a byte slice
+    data, err := io.ReadAll(file)
+    if err != nil {
+        return nil, err
+    }
 
-	_, err = file.Read(b.data)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if len(b.data) == int(BIOS_SIZE) {
-		return &BIOS{data: b.data}, nil
-	} else {
-		return nil, err
-	}
+    // Check if the read data matches the expected BIOS size
+    if len(data) == int(BIOS_SIZE) {
+        b.data = data
+        return b, nil
+    } else {
+        return nil, errors.New("incorrect BIOS size")
+    }
 }
 
 func (b *BIOS) Load32(offset uint32) uint32 {

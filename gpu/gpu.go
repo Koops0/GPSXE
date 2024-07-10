@@ -46,6 +46,7 @@ type GPU struct {
 	Gp0WordsRemaining 	    uint32
 	Gp0CommandMethod 		func(*GPU)
     Gp0Mode                 Gp0Mode
+    Renderer                Renderer
 }
 
 type TextureDepth uint8
@@ -156,6 +157,7 @@ func (g *GPU) NewGPUInstance() GPU {
 	g.Gp0Command = CommandBuffer{}.New()
 	g.Gp0WordsRemaining = 0
 	g.Gp0CommandMethod = nil
+    g.Renderer = Renderer{}.New()
     return *g
 }
 
