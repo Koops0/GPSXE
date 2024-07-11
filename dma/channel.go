@@ -15,20 +15,21 @@ type Channel struct {
 	block_count uint16
 }
 
-func (c *Channel) New() Channel{
-	c.enable = false
-	c.dir = ToRam
-	c.step = Increment
-	c.sync = Manual
-	c.trigger = false
-	c.chop = false
-	c.chop_dma_sz = 0
-	c.chop_cpu_sz = 0
-	c.dummy = 0
-	c.base = 0
-	c.block_size = 0
-	c.block_count = 0
-	return *c
+func New() *Channel{
+	return &Channel{
+		enable: false,
+        dir: ToRam,
+        step: Increment,
+        sync: Manual,
+		trigger: false,
+		chop: false,
+		chop_dma_sz: 0,
+		chop_cpu_sz: 0,
+		dummy: 0,
+		base: 0,
+		block_size: 0,
+		block_count: 0,
+    }
 }
 
 func (c *Channel) Control() uint32 { //Get interrupt val

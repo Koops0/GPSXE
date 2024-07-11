@@ -19,4 +19,8 @@ func main() {
 	cpu := &CPU{}
 	cpu.New(inter)
 	fmt.Println(cpu.reg[0])
+
+	for{
+		cpu.Run_next()
+	}
 }

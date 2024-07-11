@@ -2,11 +2,12 @@ package biosmap
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/Koops0/GPSXE/bios"
 	"github.com/Koops0/GPSXE/dma"
-	"github.com/Koops0/GPSXE/ram"
 	"github.com/Koops0/GPSXE/gpu"
+	"github.com/Koops0/GPSXE/ram"
 )
 
 type Range struct {
@@ -211,7 +212,7 @@ func (i *Interconnect) DoDMALinkedList(port dma.Port) {
 			remsz--
 		}
 
-		if header & 0x800000 != 0 {
+		if header&0x800000 != 0 {
 			break
 		}
 
@@ -222,35 +223,35 @@ func (i *Interconnect) DoDMALinkedList(port dma.Port) {
 }
 
 func (i *Interconnect) DoDMABlock(port dma.Port) {
-    var increment int // Assuming dma.Step is an int for simplicity
-    var remsz int
+	var increment int // Assuming dma.Step is an int for simplicity
+	var remsz int
 
-    channel := i.dma.Channel(port)
+	channel := i.dma.Channel(port)
 
-    // Adjust increment based on the channel's step
-    switch channel.Step() {
-    case dma.Increment:
-        increment = 4
-    case dma.Decrement:
-        increment = -4
-    default:
-        // Handle any other cases if needed
-    }
+	// Adjust increment based on the channel's step
+	switch channel.Step() {
+	case dma.Increment:
+		increment = 4
+	case dma.Decrement:
+		increment = -4
+	default:
+		// Handle any other cases if needed
+	}
 
-    addr := channel.Base()
+	addr := channel.Base()
 
-    // Use TransferSize function directly
-    transferSize := channel.TransferSize()
-    if transferSize != 0 { // Assuming TransferSize returns 0 if size is unknown
-        remsz = int(transferSize)
-    } else {
-        panic("Couldn't figure out DMA block transfer size")
-    }
+	// Use TransferSize function directly
+	transferSize := channel.TransferSize()
+	if transferSize != 0 { // Assuming TransferSize returns 0 if size is unknown
+		remsz = int(transferSize)
+	} else {
+		panic("Couldn't figure out DMA block transfer size")
+	}
 
 	for remsz > 0 {
 		cur_addr := addr & 0x1ffffc
 		var src_word uint32
-	
+
 		switch channel.Direction() {
 		case dma.ToRam:
 			switch port {
@@ -266,14 +267,14 @@ func (i *Interconnect) DoDMABlock(port dma.Port) {
 			}
 		case dma.FromRam:
 			src_word = i.ram.Load32(cur_addr)
-			switch port{
+			switch port {
 			case dma.Gpu:
 				i.gpu.Gp0(src_word)
 			default:
 				panic("Unhandled DMA port")
 			}
 		}
-	
+
 		addr = Wrapping_add(addr, uint32(increment), 32)
 		remsz--
 	}
@@ -284,7 +285,7 @@ func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
 	abaddr := Mask_region(addr)
 
 	if addr%4 != 0 {
-		panic("error!!!!")
+		panic("Load32 address alignment error")
 	} else if offset := BIOS.Contains(addr); offset != nil {
 		return i.bios.Load32(*offset)
 	} else if offset := IRQ_CONTROL.Contains(addr); offset != nil {
@@ -302,7 +303,9 @@ func (i *Interconnect) Load32(addr uint32) uint32 { //load 32-bit at addr
 		}
 	}
 
-	panic(fmt.Sprintf("Unhandled Load32 at address: 0x%08x", addr))
+	// Instead of panicking, log the unhandled address and return a default value
+	log.Printf("Warning: Unhandled Load32 at address: 0x%08x", addr)
+	return 0 // Return a default value, or consider throwing an error if that's more appropriate
 }
 
 func (i *Interconnect) Load16(addr uint32) uint16 { //load 32-bit at addr
@@ -380,28 +383,27 @@ func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in addre
 }
 
 func (i *Interconnect) Store16(addr uint32, val uint16) {
-	if addr%4 != 0 {
-		panic(fmt.Sprintf("Unhandled Store16 address: 0x%08x", addr))
-	}
+    if addr%2 != 0 {
+        log.Printf("Error: Unaligned Store16 address: 0x%08x", addr)
+        return // Consider handling this error more gracefully
+    }
 
-	abaddr := Mask_region(addr)
+    abaddr := Mask_region(addr)
 
-	if offset := SPU.Contains(abaddr); offset != nil {
-		panic(fmt.Sprintf("Unhandled Write to Register: 0x%08x", val))
-	}
-	if offset := TIMERS.Contains(abaddr); offset != nil {
-		panic(fmt.Sprintf("Unhandled Write to Timer Reg: 0x%x: 0x%08x", offset, val))
-	}
-	if offset := RAM.Contains(abaddr); offset != nil {
-		i.ram.Store16(*offset, val)
-		return
-	}
-	if offset := IRQ_CONTROL.Contains(addr); offset != nil {
-		fmt.Println("IRQ Control")
-		return
-	}
-
-	panic(fmt.Sprintf("Unhandled Store16 into address: 0x%08x", addr))
+    if offset := SPU.Contains(abaddr); offset != nil {
+        // Implement or log unhandled write to SPU register
+        log.Printf("Warning: Unhandled Write to SPU Register: 0x%08x", val)
+    } else if offset := TIMERS.Contains(abaddr); offset != nil {
+        // Implement or log unhandled write to Timer register
+        log.Printf("Warning: Unhandled Write to Timer Reg: 0x%x: 0x%08x", *offset, val)
+    } else if offset := RAM.Contains(abaddr); offset != nil {
+        i.ram.Store16(*offset, val)
+    } else if offset := IRQ_CONTROL.Contains(addr); offset != nil {
+        fmt.Println("IRQ Control Write")
+    } else {
+        // Log unhandled addresses instead of panicking
+        log.Printf("Warning: Unhandled Store16 into address: 0x%08x", addr)
+    }
 }
 
 func (i *Interconnect) Store8(addr uint32, val uint8) {
@@ -424,15 +426,15 @@ func Mask_region(addr uint32) uint32 {
 }
 
 func Wrapping_add(a uint32, b uint32, mod uint32) uint32 {
-	result := a + b
+	result := int32(a) + int32(b)
 
 	if result < 0 {
-		result += mod
-	} else if result >= mod {
-		result %= mod
+		result += int32(mod)
+	} else if result >= int32(mod) {
+		result %= int32(mod)
 	}
 
-	return result
+	return uint32(result)
 }
 
 func Wrapping_sub(a uint32, b uint32, mod uint32) uint32 {
