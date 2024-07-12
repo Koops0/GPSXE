@@ -67,13 +67,21 @@ func (c CPU) Reg(index uint32) uint32 {
 }
 
 func (c *CPU) Setreg(index uint32, val uint32) {
-	c.reg[index] = val
-	c.reg[0] = 0
+    if index == 0 {
+        // Log or debug when an attempt is made to set register 0, if unexpected
+        fmt.Println("Attempt to set reg[0], operation ignored.")
+        return
+    }
+    c.reg[index] = val
 }
 
 func (c *CPU) Set_reg(index RegIn, val uint32) {
-	c.out_reg[index] = val
-	c.out_reg[0] = 0
+    if index == 0 {
+        // Similar check for out_reg
+        fmt.Println("Attempt to set out_reg[0], operation ignored.")
+        return
+    }
+    c.out_reg[index] = val
 }
 
 func Wrapping_add(a uint32, b uint32, mod uint32) uint32 {

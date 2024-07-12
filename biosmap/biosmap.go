@@ -322,7 +322,8 @@ func (i *Interconnect) Load16(addr uint32) uint16 { //load 32-bit at addr
 		fmt.Println("IRQ Control")
 		return 0
 	}
-	panic(fmt.Sprintf("Unhandled Load16 at Address: 0x%08x", addr))
+	log.Printf("Unhandled Load16 at Address: 0x%08x", addr)
+	return 0
 }
 
 func (i *Interconnect) Load8(addr uint32) uint8 {
@@ -340,7 +341,8 @@ func (i *Interconnect) Load8(addr uint32) uint8 {
 		return 0xff
 	}
 
-	panic(fmt.Sprintf("Unhandled Load8 at address: 0x%08x", addr))
+	log.Printf("Unhandled Load8 at address: 0x%08x", addr)
+	return 0
 }
 
 func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in address
@@ -379,7 +381,7 @@ func (i *Interconnect) Store32(addr uint32, val uint32) { //Store value in addre
 		return
 	}
 
-	panic(fmt.Sprintf("Unhandled store32 into address: 0x%08x 0x%08x", addr, val))
+	log.Printf("Unhandled store32 into address: 0x%08x 0x%08x", addr, val)
 }
 
 func (i *Interconnect) Store16(addr uint32, val uint16) {
@@ -417,11 +419,12 @@ func (i *Interconnect) Store8(addr uint32, val uint8) {
 		panic(fmt.Sprintf("Unhandled Write to EX2 Register: 0x%08x", val))
 	}
 
-	panic(fmt.Sprintf("Unhandled Store8 into address: 0x%08x", addr))
+	log.Printf("Unhandled Store8 into address: 0x%08x", addr)
 }
 
 func Mask_region(addr uint32) uint32 {
 	index := addr >> 29
+	
 	return addr & REGION_MASK[index]
 }
 
