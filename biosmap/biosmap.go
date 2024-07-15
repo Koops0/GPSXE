@@ -441,13 +441,13 @@ func Wrapping_add(a uint32, b uint32, mod uint32) uint32 {
 }
 
 func Wrapping_sub(a uint32, b uint32, mod uint32) uint32 {
-	result := a - b
+	result := int32(a) - int32(b)
 
 	if result < 0 {
-		result += mod
-	} else if result >= mod {
-		result %= mod
+		result += int32(mod)
+	} else if result >= int32(mod) {
+		result %= int32(mod)
 	}
 
-	return result
+	return uint32(result)
 }

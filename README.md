@@ -55,3 +55,5 @@ GPSXE is licensed under the MIT License. Please review the license file for more
 
 * Simias' [PSX Guide](https://github.com/simias/psx-guide)
 * [Go-SDL2](https://github.com/veandco/go-sdl2)
+* [Go-GL](https://github.com/go-gl/gl)
+* [LibC](https://pkg.go.dev/modernc.org/libc)

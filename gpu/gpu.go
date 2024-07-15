@@ -291,7 +291,21 @@ func (g *GPU) Gp0QTBlendOpaque() { //0x2C
 }
 
 func (g *GPU) Gp0TriShadedOpaque() { //0x30
-    fmt.Println("Draw Triangle")
+    positions := []Position{
+        PFromGP0(g.Gp0Command.Index(1)),
+        PFromGP0(g.Gp0Command.Index(3)),
+        PFromGP0(g.Gp0Command.Index(5)),
+    }
+
+    colours := []Colour{
+        CFromGP0(g.Gp0Command.Index(0)),
+        CFromGP0(g.Gp0Command.Index(2)),
+        CFromGP0(g.Gp0Command.Index(4)),
+    }
+
+    g.Renderer.pushTriangle(positions, colours)
+
+
 }
 
 func (g *GPU) Gp0QuadShadedOpaque() { //0x38
