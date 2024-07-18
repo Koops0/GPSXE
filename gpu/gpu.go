@@ -34,8 +34,6 @@ type GPU struct {
     DrawingAreaTop          uint16
     DrawingAreaRight        uint16
     DrawingAreaBottom       uint16
-    DrawingXOffset          int16
-    DrawingYOffset          int16
     DisplayVRAMXStart       uint16
     DisplayVRAMYStart       uint16
     DisplayHorizStart       uint16
@@ -117,48 +115,48 @@ const (
 )
 
 // NewGPUInstance initializes a new GPU instance with default values.
-func (g *GPU) NewGPUInstance() GPU {
-    g.PageBaseX = 0
-    g.PageBaseY = 0
-    g.SemiTransparency = 0
-    g.TextureDepth = T4Bit
-    g.Dithering = false
-    g.DrawToDisplay = false
-    g.ForceSetMaskBit = false
-    g.PreserveMaskedPixels = false
-    g.Field = Top
-    g.TextureDisable = false
-    g.HRes = NewHorizontalRes(0, 0)
-    g.VRes = Y240Lines
-    g.VMode = NTSC
-    g.DisplayDepth = D15Bit
-    g.Interlaced = false
-    g.DisplayDisabled = true
-    g.Interrupt = false
-    g.DmaDir = Off
-    g.RectangleTextureXFlip = false
-    g.RectangleTextureYFlip = false
-	g.TextureWindowXMask = 0
-	g.TextureWindowYMask = 0
-	g.TextureWindowXOffset = 0
-	g.TextureWindowYOffset = 0
-	g.DrawingAreaLeft = 0
-	g.DrawingAreaTop = 0
-	g.DrawingAreaRight = 0
-	g.DrawingAreaBottom = 0
-	g.DrawingXOffset = 0
-	g.DrawingYOffset = 0
-	g.DisplayVRAMXStart = 0
-	g.DisplayVRAMYStart = 0
-	g.DisplayHorizStart = 0
-	g.DisplayHorizEnd = 0
-	g.DisplayLineStart = 0
-	g.DisplayLineEnd = 0
-	g.Gp0Command = CommandBuffer{}.New()
-	g.Gp0WordsRemaining = 0
-	g.Gp0CommandMethod = nil
-    g.Renderer = Renderer{}.New()
-    return *g
+func (g GPU) New(r Renderer) GPU {
+    return GPU{
+        PageBaseX: 0,
+        PageBaseY: 0,
+        SemiTransparency: 0,
+        TextureDepth: T4Bit,
+        Dithering: false,
+        DrawToDisplay: false,
+        ForceSetMaskBit: false,
+        PreserveMaskedPixels: false,
+        Field: Top,
+        TextureDisable: false,
+        HRes: NewHorizontalRes(0, 0),
+        VRes: Y240Lines,
+        VMode: NTSC,
+        DisplayDepth: D15Bit,
+        Interlaced: false,
+        DisplayDisabled: true,
+        Interrupt: false,
+        DmaDir: Off,
+        RectangleTextureXFlip: false,
+        RectangleTextureYFlip: false,
+        TextureWindowXMask: 0,
+        TextureWindowYMask: 0,
+        TextureWindowXOffset: 0,
+        TextureWindowYOffset: 0,
+        DrawingAreaLeft: 0,
+        DrawingAreaTop: 0,
+        DrawingAreaRight: 0,
+        DrawingAreaBottom: 0,
+        DisplayVRAMXStart: 0,
+        DisplayVRAMYStart: 0,
+        DisplayHorizStart: 0x200,
+        DisplayHorizEnd: 0xc00,
+        DisplayLineStart: 0x10,
+        DisplayLineEnd: 0x100,
+        Gp0Command: CommandBuffer{}.New(),
+        Gp0WordsRemaining: 0,
+        Gp0CommandMethod: nil,
+        Gp0Mode: Command,
+        Renderer: r,
+    }
 }
 
 func boolToUint32(b bool) uint32 {
@@ -283,11 +281,39 @@ func (g *GPU) Gp0Nop() { //0x00
 }
 
 func (g *GPU) Gp0QuadMonoOpaque() { //0x28
-	fmt.Println("Draw Quad")
+	positions := []Position{
+        PFromGP0(g.Gp0Command.Index(1)),
+        PFromGP0(g.Gp0Command.Index(2)),
+        PFromGP0(g.Gp0Command.Index(3)),
+        PFromGP0(g.Gp0Command.Index(4)),
+    }
+
+    colours := []Colour{
+        CFromGP0(g.Gp0Command.Index(0)),
+        CFromGP0(g.Gp0Command.Index(0)),
+        CFromGP0(g.Gp0Command.Index(0)),
+        CFromGP0(g.Gp0Command.Index(0)),
+    }
+
+    g.Renderer.PushQuad(positions, colours)
 }
 
-func (g *GPU) Gp0QTBlendOpaque() { //0x2C
-    fmt.Println("Draw Quad")
+func (g *GPU) Gp0QTBlendOpaque() { //0x2C, Will add textures
+    positions := []Position{
+        PFromGP0(g.Gp0Command.Index(1)),
+        PFromGP0(g.Gp0Command.Index(3)),
+        PFromGP0(g.Gp0Command.Index(5)),
+        PFromGP0(g.Gp0Command.Index(7)),
+    }
+
+    colours := []Colour{
+        {0x80, 0x00, 0x00},
+        {0x80, 0x00, 0x00},
+        {0x80, 0x00, 0x00},
+        {0x80, 0x00, 0x00},
+    }
+
+    g.Renderer.PushQuad(positions, colours)
 }
 
 func (g *GPU) Gp0TriShadedOpaque() { //0x30
@@ -304,12 +330,24 @@ func (g *GPU) Gp0TriShadedOpaque() { //0x30
     }
 
     g.Renderer.PushTriangle(positions, colours)
-
-
 }
 
 func (g *GPU) Gp0QuadShadedOpaque() { //0x38
-    fmt.Println("Draw Quad")
+    positions := []Position{
+        PFromGP0(g.Gp0Command.Index(1)),
+        PFromGP0(g.Gp0Command.Index(3)),
+        PFromGP0(g.Gp0Command.Index(5)),
+        PFromGP0(g.Gp0Command.Index(7)),
+    }
+
+    colours := []Colour{
+        CFromGP0(g.Gp0Command.Index(0)),
+        CFromGP0(g.Gp0Command.Index(2)),
+        CFromGP0(g.Gp0Command.Index(4)),
+        CFromGP0(g.Gp0Command.Index(6)),
+    }
+
+    g.Renderer.PushQuad(positions, colours)
 }
 
 func (g *GPU) Gp0ImgLoad(val uint32) { //0xA0
@@ -374,8 +412,9 @@ func (g *GPU) Gp0DrawOffset(val uint32){ //0xE5
 	y := int16((val >> 11) & 0x7FF)
 
 	// Sign extend to 16 bits
-	g.DrawingXOffset = int16(x << 5) >> 5
-	g.DrawingYOffset = int16(y << 5) >> 5
+	XOffset := int16(x << 5) >> 5
+	YOffset := int16(y << 5) >> 5
+    g.Renderer.DrawOffset(XOffset, YOffset)
     g.Renderer.Display()
 }
 
@@ -419,8 +458,6 @@ func (g *GPU) Gp1Reset() {
 	g.DrawingAreaTop = 0
 	g.DrawingAreaRight = 0
 	g.DrawingAreaBottom = 0
-	g.DrawingXOffset = 0
-	g.DrawingYOffset = 0
 	g.ForceSetMaskBit = false
 	g.PreserveMaskedPixels = false
 

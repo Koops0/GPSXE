@@ -36,16 +36,17 @@ func CFromGP0(val uint32) Colour {
 
 // Renderer struct
 type Renderer struct {
-	sdlc           error
-	window         *sdl.Window
-	context        sdl.GLContext
-	vertexShader   uint32
-	fragmentShader uint32
-	program        uint32
-	vao            uint32
-	positions      Buffer[Position]
-	colours        Buffer[Colour]
-	nVertices      uint32
+	sdlc           	error
+	window         	*sdl.Window
+	context        	sdl.GLContext
+	vertexShader   	uint32
+	fragmentShader 	uint32
+	program        	uint32
+	vao            	uint32
+	positions      	Buffer[Position]
+	colours        	Buffer[Colour]
+	nVertices      	uint32
+	offset			int32
 }
 
 func (r Renderer) New() Renderer {
@@ -135,6 +136,11 @@ func (r Renderer) New() Renderer {
 	r.colours = colours
 	r.nVertices = 0
 
+	//offset
+	offset := int32(FindProgAttrib(program, "offset"))
+	gl.Uniform2ui(offset, 0, 0)
+	r.offset = offset
+
 	return r
 }
 
@@ -196,6 +202,28 @@ func (r *Renderer) PushTriangle(positions []Position, colours []Colour) {
 
 }
 
+func (r *Renderer) PushQuad(positions []Position, colours []Colour) {
+	if r.nVertices+6 > VERTEX_BUFFER_LEN {
+		fmt.Println("Too many vertices, forcing draw")
+		r.Draw()
+	}
+
+	//Tri 1
+	for i := 0; i < 3; i++ {
+		r.positions.Set(r.nVertices, positions[i])
+		r.colours.Set(r.nVertices, colours[i])
+		r.nVertices++
+	}
+
+	//Tri 2
+	for i := 1; i < 4; i++ {
+		r.positions.Set(r.nVertices, positions[i])
+		r.colours.Set(r.nVertices, colours[i])
+		r.nVertices++
+	}
+
+}
+
 func (r *Renderer) Draw() {
 	//flush to buffer
 	gl.MemoryBarrier(gl.CLIENT_MAPPED_BUFFER_BARRIER_BIT)
@@ -213,6 +241,11 @@ func (r *Renderer) Draw() {
 	}
 
 	r.nVertices = 0
+}
+
+func (r *Renderer)DrawOffset(x int16, y int16){
+	r.Draw()
+	gl.Uniform2ui(r.offset, uint32(x), uint32(y))
 }
 
 func (r *Renderer) Display(){

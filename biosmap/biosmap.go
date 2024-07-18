@@ -99,9 +99,10 @@ type Interconnect struct {
 	gpu  gpu.GPU
 }
 
-func (i Interconnect) New(bios *bios.BIOS) Interconnect {
+func (i Interconnect) New(bios *bios.BIOS, gpu gpu.GPU) Interconnect {
 	i.bios = *bios
 	i.dma.New()
+	i.gpu = gpu
 	return i
 }
 

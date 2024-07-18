@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 
+	"github.com/veandco/go-sdl2/sdl"
 	"github.com/go-gl/gl/v4.6-core/gl"
 
 	"github.com/Koops0/GPSXE/bios"
 	"github.com/Koops0/GPSXE/biosmap"
+	"github.com/Koops0/GPSXE/gpu"
 )
 
 func main() {
@@ -16,14 +18,30 @@ func main() {
 		return
 	}
 
-	inter := biosmap.Interconnect{}.New(bios)
+	if err := sdl.Init(sdl.INIT_VIDEO); err != nil {
+		fmt.Println("Error initializing SDL:", err)
+		return
+	}
+	defer sdl.Quit()
 
+	// Create an SDL renderer for the window
+	renderer := gpu.Renderer{}.New()
+	gpu := gpu.GPU{}.New(renderer)
+	inter := biosmap.Interconnect{}.New(bios, gpu)
 	cpu := &CPU{}
 	cpu.New(inter)
 	fmt.Println(cpu.reg[0])
 
 	for{
-		cpu.Run_next()
+		for i := 0; i < 1000000; i++ {
+			cpu.Run_next()
+		}
+		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+            switch event.(type) {
+            case *sdl.QuitEvent:
+                return
+            }
+        }
 	}
 }
 
