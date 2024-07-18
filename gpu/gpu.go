@@ -303,7 +303,7 @@ func (g *GPU) Gp0TriShadedOpaque() { //0x30
         CFromGP0(g.Gp0Command.Index(4)),
     }
 
-    g.Renderer.pushTriangle(positions, colours)
+    g.Renderer.PushTriangle(positions, colours)
 
 
 }
@@ -376,6 +376,7 @@ func (g *GPU) Gp0DrawOffset(val uint32){ //0xE5
 	// Sign extend to 16 bits
 	g.DrawingXOffset = int16(x << 5) >> 5
 	g.DrawingYOffset = int16(y << 5) >> 5
+    g.Renderer.Display()
 }
 
 func (g *GPU) Gp0MaskBitSetting(val uint32){ //0xE6

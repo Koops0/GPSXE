@@ -182,7 +182,7 @@ func FindProgAttrib(program uint32, name string) uint32 {
 	return uint32(index)
 }
 
-func (r *Renderer) pushTriangle(positions []Position, colours []Colour) {
+func (r *Renderer) PushTriangle(positions []Position, colours []Colour) {
 	if r.nVertices+3 > VERTEX_BUFFER_LEN {
 		fmt.Println("Too many vertices, forcing draw")
 		r.Draw()
