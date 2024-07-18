@@ -21,7 +21,7 @@ func (d *DMA) New() DMA{
 	d.dummy_irq = 0
 	d.Channels = [7]Channel{}
 	for i := 0; i < 7; i++ {
-		d.Channels[i].New()
+		d.Channels[i] = *New()
 	}
 	return *d
 }

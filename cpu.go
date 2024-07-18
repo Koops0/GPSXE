@@ -67,37 +67,45 @@ func (c CPU) Reg(index uint32) uint32 {
 }
 
 func (c *CPU) Setreg(index uint32, val uint32) {
-	c.reg[index] = val
-	c.reg[0] = 0
+    if index == 0 {
+        // Log or debug when an attempt is made to set register 0, if unexpected
+        fmt.Println("Attempt to set reg[0], operation ignored.")
+        return
+    }
+    c.reg[index] = val
 }
 
 func (c *CPU) Set_reg(index RegIn, val uint32) {
-	c.out_reg[index] = val
-	c.out_reg[0] = 0
+    if index == 0 {
+        // Similar check for out_reg
+        fmt.Println("Attempt to set out_reg[0], operation ignored.")
+        return
+    }
+    c.out_reg[index] = val
 }
 
 func Wrapping_add(a uint32, b uint32, mod uint32) uint32 {
-	result := a + b
+	result := int32(a) + int32(b)
 
 	if result < 0 {
-		result += mod
-	} else if result >= mod {
-		result %= mod
+		result += int32(mod)
+	} else if result >= int32(mod) {
+		result %= int32(mod)
 	}
 
-	return result
+	return uint32(result)
 }
 
 func Wrapping_sub(a uint32, b uint32, mod uint32) uint32 {
-	result := a - b
+	result := int32(a) - int32(b)
 
 	if result < 0 {
-		result += mod
-	} else if result >= mod {
-		result %= mod
+		result += int32(mod)
+	} else if result >= int32(mod) {
+		result %= int32(mod)
 	}
 
-	return result
+	return uint32(result)
 }
 
 func Checkedadd(a, b int32) (int32, error) {
@@ -205,7 +213,7 @@ func (c *CPU) Opmfc0(inst Instruction) { //Coprocessor 0
 	case 14:
 		c.epc = cop_r
 	default:
-		panic(fmt.Sprintf("Unhandled read from cop_r"))
+		panic("Unhandled read from cop_r")
 	}
 
 	v := cop_r
@@ -227,7 +235,7 @@ func (c *CPU) Opmtc0(inst Instruction) { //Or
 		c.sr = v
 	case 13:
 		if v != 0 {
-			panic(fmt.Sprintf("Unhandled write to CAUSE"))
+			panic("Unhandled write to CAUSE")
 		}
 	default:
 		panic(fmt.Sprintf("Unhandled COP reg: %x", cop_r))
@@ -325,7 +333,7 @@ func (c *CPU) Opsltu(inst Instruction) { //Set on less than unsigned
 	v := c.reg[s] < c.reg[t]
 	u := 0
 
-	if v == true {
+	if v{
 		u = 1
 	}
 	c.Setreg(d, uint32(u))
@@ -489,7 +497,7 @@ func (c *CPU) Opbxx(inst Instruction) { //Tons of inst
 	is_bgez := (instruction >> 16) & 1
 	is_link := (instruction>>20)&1 != 0
 
-	v := uint32(c.reg[s])
+	v := int32(c.reg[s])
 
 	test := uint32(0)
 	if v < 0 {
@@ -620,7 +628,7 @@ func (c *CPU) Opslt(inst Instruction) { //set on less signed
 	v := int32(c.reg[s]) < int32(c.reg[t])
 	u := 0
 
-	if v == true {
+	if v{
 		u = 1
 	}
 	c.Setreg(d, uint32(u))
@@ -783,9 +791,9 @@ func (c *CPU) Oplwl(inst Instruction) { //Load word left
 	case 2:
 		v = (cur_v & 0x000000ff) | (aligned_word << 8)
 	case 3:
-		v = (cur_v & 0x00000000) | (aligned_word << 0)
+		v = 0 | (aligned_word << 0)
 	default:
-		panic(fmt.Sprintf("Unreachable"))
+		panic("Unreachable")
 	}
 
 	c.load.Load(RegIn(t), v)
@@ -813,9 +821,9 @@ func (c *CPU) Oplwr(inst Instruction) { //Load word right
 	case 2:
 		v = (cur_v & 0x000000ff) | (aligned_word >> 8)
 	case 3:
-		v = (cur_v & 0x00000000) | (aligned_word >> 0)
+		v = 0 | (aligned_word >> 0)
 	default:
-		panic(fmt.Sprintf("Unreachable"))
+		panic("Unreachable")
 	}
 
 	c.load.Load(RegIn(t), v)
@@ -832,7 +840,7 @@ func (c *CPU) Opswl(inst Instruction) { //Shift word left
 	aligned_addr := addr &^ 3
 	cur_mem := c.Load32(aligned_addr)
 
-	mem := addr & 3
+	var mem uint32 = addr & 3
 
 	switch v {
 	case 0:
@@ -842,9 +850,9 @@ func (c *CPU) Opswl(inst Instruction) { //Shift word left
 	case 2:
 		mem = (cur_mem & 0x000000ff) | (v >> 8)
 	case 3:
-		mem = (cur_mem & 0x00000000) | (v >> 0)
+		mem = 0 | (v >> 0)
 	default:
-		panic(fmt.Sprintf("Unreachable"))
+		panic("Unreachable")
 	}
 
 	c.Store32(addr, mem)
@@ -861,19 +869,19 @@ func (c *CPU) Opswr(inst Instruction) { //Shift word right
 	aligned_addr := addr &^ 3
 	cur_mem := c.Load32(aligned_addr)
 
-	mem := addr & 3
+	var mem uint32 = addr & 3
 
 	switch v {
 	case 0:
-		mem = (cur_mem & 0x00ffffff) | (v << 24)
+		mem = (cur_mem & 0x00ffffff) | (v >> 24)
 	case 1:
-		mem = (cur_mem & 0x0000ffff) | (v << 16)
+		mem = (cur_mem & 0x0000ffff) | (v >> 16)
 	case 2:
-		mem = (cur_mem & 0x000000ff) | (v << 8)
+		mem = (cur_mem & 0x000000ff) | (v >> 8)
 	case 3:
-		mem = (cur_mem & 0x00000000) | (v << 0)
+		mem = 0 | (v >> 0)
 	default:
-		panic(fmt.Sprintf("Unreachable"))
+		panic("Unreachable")
 	}
 
 	c.Store32(addr, mem)
@@ -1090,24 +1098,26 @@ func (c *CPU) Decode_and_execute(inst Instruction) {
 	}
 }
 
-func (c *CPU) Run_next(inst Instruction) {
-	inst.op = c.Load32(c.pc) //Grab inst
+func (c *CPU) Run_next() {
 	c.current_pc = c.pc
 
-	if c.current_pc%4 != 0 {
+	if c.current_pc % 4 != 0 {
 		c.Exception(LoadAddressError)
 		return
 	}
 
-	c.delay_slot = c.branch
-	c.branch = false
+	inst := Instruction{op: c.Load32(c.pc)}
 
-	c.pc = c.next_pc //Increment
+	c.pc = c.next_pc
 	c.next_pc = Wrapping_add(c.next_pc, 4, 32)
 
 	c.Set_reg(c.load.r, c.load.val)
-	c.load.Load(0, 0)
-	c.Decode_and_execute(inst)
+	c.load.Load(0,0)
+
+	c.delay_slot = c.branch
+	c.branch = false
+	c.Decode_and_execute(inst) // Cast inst to Instruction type
+
 	c.reg = c.out_reg
 }
 
