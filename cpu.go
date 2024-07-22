@@ -944,6 +944,11 @@ func (c *CPU) Store8(addr uint32, val uint8) {
 	c.inter.Store8(addr, val)
 }
 
+func (c *CPU) Load32(addr uint32) uint32 { //load 32-bit from inter
+	return c.inter.Load32(addr)
+}
+
+
 func (c *CPU) Load16(addr uint32) uint16 {
 	return c.inter.Load16(addr)
 }
@@ -1119,10 +1124,6 @@ func (c *CPU) Run_next() {
 	c.Decode_and_execute(inst) // Cast inst to Instruction type
 
 	c.reg = c.out_reg
-}
-
-func (c *CPU) Load32(addr uint32) uint32 { //load 32-bit from inter
-	return c.inter.Load32(addr)
 }
 
 func (c *CPU) Exception(cause Exception) { //Trigger Exception

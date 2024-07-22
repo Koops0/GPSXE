@@ -609,3 +609,28 @@ func Gp0DrawOffsetWrapper(g *GPU, val uint32) {
 func Gp0MaskBitSettingWrapper(g *GPU, val uint32) {
     g.Gp0MaskBitSetting(val)
 }
+
+func (g *GPU) load(offset uint32) uint32 {
+    var r uint32
+    switch offset {
+    case 0:
+        r = g.Read()
+    case 4:
+        r = g.Status()
+    default:
+        panic("unreachable!")
+    }
+
+    return r
+}
+
+func (g *GPU) store(offset uint32, val uint32) {
+    switch offset {
+    case 0:
+        g.Gp0(val)
+    case 4:
+        g.Gp1(val)
+    default:
+        panic("unreachable!")
+    }
+}
