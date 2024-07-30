@@ -944,6 +944,11 @@ func (c *CPU) Store8(addr uint32, val uint8) {
 	c.inter.Store8(addr, val)
 }
 
+func (c *CPU) Load32(addr uint32) uint32 { //load 32-bit from inter
+	return c.inter.Load32(addr)
+}
+
+
 func (c *CPU) Load16(addr uint32) uint16 {
 	return c.inter.Load16(addr)
 }
@@ -1098,8 +1103,10 @@ func (c *CPU) Decode_and_execute(inst Instruction) {
 	}
 }
 
-func (c *CPU) Run_next() {
+func (c *CPU) Run_next(d Debugger) {
 	c.current_pc = c.pc
+
+	d.PcChange(*c)
 
 	if c.current_pc % 4 != 0 {
 		c.Exception(LoadAddressError)
@@ -1121,8 +1128,8 @@ func (c *CPU) Run_next() {
 	c.reg = c.out_reg
 }
 
-func (c *CPU) Load32(addr uint32) uint32 { //load 32-bit from inter
-	return c.inter.Load32(addr)
+func (c *CPU) Pc() uint32 {
+	return c.pc
 }
 
 func (c *CPU) Exception(cause Exception) { //Trigger Exception
