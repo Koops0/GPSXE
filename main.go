@@ -31,18 +31,28 @@ func main() {
 	cpu := &CPU{}
 	cpu.New(inter)
 	fmt.Println(cpu.reg[0])
+    debugger := Debugger{}
 
-	for{
-		for i := 0; i < 1000000; i++ {
-			cpu.Run_next()
-		}
-		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-            switch event.(type) {
+	for {
+        for i := 0; i < 1000000; i++ {
+            cpu.Run_next(debugger)
+        }
+        for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+            switch e := event.(type) {
+            case *sdl.KeyboardEvent:
+                if e.Type == sdl.KEYDOWN {
+                    switch e.Keysym.Sym {
+                    case sdl.K_PAUSE:
+                        debugger.Debug(*cpu)
+                    case sdl.K_ESCAPE:
+                        return
+                    }
+                }
             case *sdl.QuitEvent:
                 return
             }
         }
-	}
+    }
 }
 
 func CheckForErrors() {
